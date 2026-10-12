@@ -1,0 +1,103 @@
+:root {
+  --bg: #0b1220;
+  --panel: #121b2e;
+  --panel-border: #22304a;
+  --text: #e8edf7;
+  --muted: #8ea0bf;
+  --accent: #38bdf8;
+  --home: #4ade80;
+  --away: #f472b6;
+  --warn: #fbbf24;
+  --bad: #f87171;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+}
+
+header { padding: 16px 24px 4px; }
+header h1 { margin: 0; font-size: 1.4rem; display: flex; align-items: center; gap: 8px; }
+.live-dot {
+  width: 10px; height: 10px; border-radius: 50%; background: var(--accent);
+  box-shadow: 0 0 0 0 rgba(56,189,248,.6); animation: pulse 1.6s infinite;
+}
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 0 rgba(56,189,248,.6); }
+  70% { box-shadow: 0 0 0 8px rgba(56,189,248,0); }
+  100% { box-shadow: 0 0 0 0 rgba(56,189,248,0); }
+}
+.subtitle { color: var(--muted); font-size: .85rem; margin-top: 2px; }
+
+main {
+  display: grid;
+  grid-template-columns: 220px 1.2fr 1fr;
+  gap: 16px;
+  padding: 16px 24px;
+  align-items: start;
+}
+@media (max-width: 1100px) {
+  main { grid-template-columns: 1fr; }
+}
+
+.roster-panel, .pitch-panel, .dossier-panel {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.team-label { font-size: .75rem; text-transform: uppercase; letter-spacing: .04em; margin: 10px 0 6px; }
+.team-label.home { color: var(--home); }
+.team-label.away { color: var(--away); }
+.roster { display: flex; flex-direction: column; gap: 3px; margin-bottom: 4px; }
+.roster button {
+  text-align: left; background: transparent; border: 1px solid transparent; color: var(--text);
+  padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: .85rem;
+  display: flex; justify-content: space-between;
+}
+.roster button .pos { color: var(--muted); font-size: .72rem; }
+.roster button:hover { border-color: var(--panel-border); }
+.roster button.selected { border-color: var(--accent); background: rgba(56,189,248,.08); }
+
+#pitch { width: 100%; background: #0f3d23; border-radius: 8px; display: block; }
+
+.timeline { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+.timeline input[type="range"] { flex: 1; }
+#playBtn { background: var(--accent); color: #06230f; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-weight: 600; }
+#minuteLabel { width: 34px; text-align: right; color: var(--muted); }
+
+.legend { display: flex; gap: 12px; margin-top: 8px; font-size: .72rem; color: var(--muted); flex-wrap: wrap; }
+.legend .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; }
+.dot.pass { background: #94a3b8; }
+.dot.duel-won { background: #4ade80; }
+.dot.duel-lost { background: #f87171; }
+.dot.foul { background: #fbbf24; }
+.dot.shot { background: #38bdf8; }
+
+.player-header { font-weight: 700; font-size: 1.05rem; margin-bottom: 4px; }
+.stat-line { color: var(--muted); font-size: .82rem; margin-bottom: 10px; line-height: 1.5; }
+
+.view-toggle { display: flex; gap: 8px; margin-bottom: 10px; }
+.mode-btn { background: transparent; border: 1px solid var(--panel-border); color: var(--muted); padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: .8rem; }
+.mode-btn.active { color: var(--text); border-color: var(--accent); }
+#langSelect { margin-left: auto; background: var(--bg); color: var(--text); border: 1px solid var(--panel-border); border-radius: 6px; }
+
+.dossier-panel h2 { font-size: .85rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 14px 0 6px; }
+.entry-list { display: flex; flex-direction: column; gap: 8px; }
+.entry-card { border: 1px solid var(--panel-border); border-radius: 8px; padding: 8px 10px; cursor: pointer; }
+.entry-card:hover { border-color: var(--accent); }
+.entry-card .headline { font-weight: 600; font-size: .88rem; }
+.entry-card .narrative { font-size: .82rem; margin-top: 4px; }
+.entry-card .meta { font-size: .72rem; color: var(--muted); margin-top: 4px; }
+.entry-card.strength { border-left: 3px solid var(--home); }
+.entry-card.watch_point { border-left: 3px solid var(--warn); }
+.empty-note { color: var(--muted); font-size: .82rem; }
+
+footer { color: var(--muted); font-size: .8rem; padding: 8px 24px 24px; text-align: center; }
+
+.ev-dot { opacity: .35; }
+.ev-dot.highlight { opacity: 1; stroke: #fff; stroke-width: 0.6; }

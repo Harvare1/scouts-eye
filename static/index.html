@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="Live, evidence-grounded scouting dossiers generated from synthetic match events." />
+  <title>Scout's Eye</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <h1>Scout's Eye <span class="live-dot"></span></h1>
+    <div class="subtitle">Live scouting dossiers, built from evidence as the match unfolds</div>
+  </header>
+
+  <main>
+    <aside class="roster-panel">
+      <div class="team-label home">Albion United</div>
+      <div id="homeRoster" class="roster"></div>
+      <div class="team-label away">Caldervale FC</div>
+      <div id="awayRoster" class="roster"></div>
+    </aside>
+
+    <section class="pitch-panel">
+      <svg id="pitch" viewBox="0 0 105 68" preserveAspectRatio="xMidYMid meet"></svg>
+      <div class="timeline">
+        <button id="playBtn">&#9654; Play</button>
+        <input id="scrubber" type="range" min="0" max="90" value="90" step="1" />
+        <span id="minuteLabel">90'</span>
+      </div>
+      <div class="legend">
+        <span><i class="dot pass"></i> pass</span>
+        <span><i class="dot duel-won"></i> duel won</span>
+        <span><i class="dot duel-lost"></i> duel lost</span>
+        <span><i class="dot foul"></i> foul</span>
+        <span><i class="dot shot"></i> shot</span>
+      </div>
+    </section>
+
+    <section class="dossier-panel">
+      <div id="playerHeader" class="player-header">Select a player</div>
+      <div id="statLine" class="stat-line"></div>
+      <div class="view-toggle">
+        <button class="mode-btn active" data-mode="analyst">Analyst view</button>
+        <button class="mode-btn" data-mode="fan">Plain-language view</button>
+        <select id="langSelect">
+          <option value="en">EN</option>
+          <option value="sv">SV</option>
+          <option value="es">ES</option>
+        </select>
+      </div>
+      <h2>Strengths</h2>
+      <div id="strengthList" class="entry-list"></div>
+      <h2>Watch points</h2>
+      <div id="watchList" class="entry-list"></div>
+    </section>
+  </main>
+
+  <footer>
+    Every dossier line cites the exact synthetic event ids behind it &mdash;
+    this is a demo for Microsoft's Inside the Game hackathon, not a real player assessment.
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
