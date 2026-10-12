@@ -18,6 +18,8 @@ def _cite(event_ids: list[str]) -> str:
 
 _TEMPLATES = {
     ("strength", "progressive_passing"): "{headline}: {desc} {cite}",
+    ("strength", "ball_retention"): "{headline}: {desc} {cite}",
+    ("watch_point", "ball_retention"): "{headline}: {desc} {cite}",
     ("strength", "duels"): "{headline}: {desc} {cite}",
     ("watch_point", "duels"): "{headline}: {desc} Worth checking on video before relying on him defensively. {cite}",
     ("strength", "pressing_workrate"): "{headline}: {desc} A real asset in a high press. {cite}",

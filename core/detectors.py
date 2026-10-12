@@ -40,9 +40,44 @@ def detect_progressive_passing(
     )]
 
 
+def detect_ball_retention(
+    events: list[Event], player_id: str, metrics: PlayerMetrics,
+    min_passes: int = 12, strength_rate: float = 0.85, watch_rate: float = 0.65,
+) -> list[DossierEntry]:
+    passes = [e for e in events if e.player_id == player_id and e.type == "pass"]
+    if len(passes) < min_passes:
+        return []
+    completed = [e for e in passes if e.outcome == "success"]
+    rate = len(completed) / len(passes)
+    if rate >= strength_rate:
+        return [DossierEntry(
+            id=_next_id(), player_id=player_id, kind="strength", category="ball_retention",
+            headline="Rarely gives the ball away",
+            evidence=Evidence(
+                event_ids=[e.id for e in completed], metric="pass_completion", value=round(rate, 2),
+                description=f"{len(completed)} of {len(passes)} passes ({rate:.0%}) completed.",
+            ),
+            confidence=min(0.95, 0.3 + rate),
+            params={"rate": round(rate, 2)},
+        )]
+    if rate <= watch_rate:
+        failed = [e for e in passes if e.outcome == "failed"]
+        return [DossierEntry(
+            id=_next_id(), player_id=player_id, kind="watch_point", category="ball_retention",
+            headline="Gives the ball away more than you'd like",
+            evidence=Evidence(
+                event_ids=[e.id for e in failed], metric="pass_completion", value=round(rate, 2),
+                description=f"Only {len(completed)} of {len(passes)} passes ({rate:.0%}) completed.",
+            ),
+            confidence=min(0.95, 0.3 + (1 - rate)),
+            params={"rate": round(rate, 2)},
+        )]
+    return []
+
+
 def detect_duel_profile(
     events: list[Event], player_id: str, metrics: PlayerMetrics,
-    min_duels: int = 8, strength_rate: float = 0.65, watch_rate: float = 0.35,
+    min_duels: int = 6, strength_rate: float = 0.60, watch_rate: float = 0.40,
 ) -> list[DossierEntry]:
     duels = [e for e in events if e.player_id == player_id and e.type in ("tackle", "interception")]
     if len(duels) < min_duels:
@@ -77,7 +112,7 @@ def detect_duel_profile(
 
 def detect_pressing_workrate(
     events: list[Event], player_id: str, metrics: PlayerMetrics,
-    min_actions: int = 6, high_zone_x: float = 52.5,
+    min_actions: int = 4, high_zone_x: float = 52.5,
 ) -> list[DossierEntry]:
     high_actions = [
         e for e in events
@@ -99,7 +134,7 @@ def detect_pressing_workrate(
 
 
 def detect_discipline(
-    events: list[Event], player_id: str, metrics: PlayerMetrics, min_fouls: int = 3,
+    events: list[Event], player_id: str, metrics: PlayerMetrics, min_fouls: int = 2,
 ) -> list[DossierEntry]:
     fouls = [e for e in events if e.player_id == player_id and e.type == "foul"]
     if len(fouls) < min_fouls:
@@ -118,7 +153,7 @@ def detect_discipline(
 
 def detect_finishing(
     events: list[Event], player_id: str, metrics: PlayerMetrics,
-    min_shots: int = 4, strength_rate: float = 0.55, watch_rate: float = 0.32,
+    min_shots: int = 3, strength_rate: float = 0.50, watch_rate: float = 0.38,
 ) -> list[DossierEntry]:
     shots = [e for e in events if e.player_id == player_id and e.type in ("shot", "goal")]
     if len(shots) < min_shots:
@@ -153,6 +188,7 @@ def detect_finishing(
 def run_all_detectors(events: list[Event], player_id: str, metrics: PlayerMetrics) -> list[DossierEntry]:
     entries = []
     entries += detect_progressive_passing(events, player_id, metrics)
+    entries += detect_ball_retention(events, player_id, metrics)
     entries += detect_duel_profile(events, player_id, metrics)
     entries += detect_pressing_workrate(events, player_id, metrics)
     entries += detect_discipline(events, player_id, metrics)

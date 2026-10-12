@@ -83,7 +83,7 @@ class DossierEntry:
     player_id: str
     kind: Literal["strength", "watch_point"]
     category: Literal[
-        "progressive_passing", "duels", "pressing_workrate",
+        "progressive_passing", "ball_retention", "duels", "pressing_workrate",
         "discipline", "finishing",
     ]
     headline: str

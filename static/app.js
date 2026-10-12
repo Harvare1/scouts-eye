@@ -13,6 +13,18 @@ const langSelect = document.getElementById('langSelect');
 
 let match = null, selectedPlayerId = null, dossier = null, mode = 'analyst';
 let highlightedIds = null, playing = false, playTimer = null;
+let minuteById = new Map();
+
+function humanizeCitations(text) {
+  // Dossier text cites raw event ids (e.g. "e498") so the backend grounding
+  // checker can mechanically verify them against the evidence set. Swap
+  // each one for its match minute here, purely for display — the backend
+  // text (and the grounding check) is untouched.
+  return text.replace(/\be\d+\b/g, id => {
+    const minute = minuteById.get(id);
+    return minute === undefined ? id : `${minute}'`;
+  });
+}
 
 function svgEl(tag, attrs) {
   const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
@@ -76,7 +88,8 @@ function statLineText(metrics) {
 function entryCard(entry) {
   const card = document.createElement('div');
   card.className = `entry-card ${entry.kind}`;
-  const text = mode === 'analyst' ? entry.narrative.analyst_en : entry.narrative['fan_' + langSelect.value];
+  const rawText = mode === 'analyst' ? entry.narrative.analyst_en : entry.narrative['fan_' + langSelect.value];
+  const text = mode === 'analyst' ? humanizeCitations(rawText) : rawText;
   card.innerHTML = `
     <div class="headline">${entry.headline}</div>
     <div class="narrative">${text}</div>
@@ -156,6 +169,7 @@ playBtn.addEventListener('click', () => {
 
 async function init() {
   match = await fetch('/api/match').then(r => r.json());
+  minuteById = new Map(match.events.map(e => [e.id, e.minute]));
   renderRoster();
   renderPitch();
   selectPlayer(match.players.find(p => p.archetype !== 'balanced')?.id || match.players[0].id);

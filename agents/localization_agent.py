@@ -10,6 +10,8 @@ from core.models import DossierEntry
 _TEMPLATES = {
     "en": {
         ("strength", "progressive_passing"): "Breaks lines with his passing — a real progressive threat.",
+        ("strength", "ball_retention"): "Keeps hold of the ball — rarely gives possession away.",
+        ("watch_point", "ball_retention"): "Loses the ball more often than you'd like to see.",
         ("strength", "duels"): "Wins the ball back consistently in one-on-ones.",
         ("watch_point", "duels"): "Struggling to win the ball back in duels right now.",
         ("strength", "pressing_workrate"): "Causes problems by winning the ball high up the pitch.",
@@ -19,6 +21,8 @@ _TEMPLATES = {
     },
     "sv": {
         ("strength", "progressive_passing"): "Bryter linjer med sina passningar — ett verkligt progressivt hot.",
+        ("strength", "ball_retention"): "Håller i bollen — tappar sällan den.",
+        ("watch_point", "ball_retention"): "Tappar bollen oftare än önskvärt.",
         ("strength", "duels"): "Vinner bollen konsekvent i närkamper.",
         ("watch_point", "duels"): "Har svårt att vinna tillbaka bollen i närkamper just nu.",
         ("strength", "pressing_workrate"): "Skapar problem genom att vinna bollen högt upp på planen.",
@@ -28,6 +32,8 @@ _TEMPLATES = {
     },
     "es": {
         ("strength", "progressive_passing"): "Rompe líneas con sus pases: una amenaza progresiva real.",
+        ("strength", "ball_retention"): "Conserva el balón — rara vez lo pierde.",
+        ("watch_point", "ball_retention"): "Pierde el balón más de lo deseable.",
         ("strength", "duels"): "Gana el balón de forma consistente en los duelos.",
         ("watch_point", "duels"): "Le está costando recuperar el balón en los duelos.",
         ("strength", "pressing_workrate"): "Genera problemas recuperando el balón en campo rival.",
