@@ -1,0 +1,27 @@
+services:
+  scouts-eye:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8090:8090"
+    environment:
+      PORT: "8090"
+      QUIET: "1"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import json, urllib.request;
+          response = urllib.request.urlopen('http://127.0.0.1:8090/health', timeout=3);
+          assert response.status == 200 and json.load(response) == {'status': 'ok'}
+      interval: 15s
+      timeout: 5s
+      retries: 4
+      start_period: 10s
+    labels:
+      autoheal: "true"
+

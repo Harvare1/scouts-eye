@@ -1,0 +1,198 @@
+name: Deploy production
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scouts-eye-production
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install --requirement requirements.txt
+      - run: pytest -q
+
+  deploy-apps:
+    name: Deploy ${{ matrix.label }}
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: appserver1
+            host: 82.197.73.183
+            password_secret: APPSERVER1_SSH_PASSWORD
+          - label: appserver2
+            host: 207.2.123.192
+            password_secret: APPSERVER2_SSH_PASSWORD
+
+    env:
+      SSHPASS: ${{ secrets[matrix.password_secret] }}
+
+    steps:
+      - name: Install SSH password helper
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes sshpass
+
+      - name: Deploy exact revision with Docker Compose
+        run: |
+          if [ -z "$SSHPASS" ]; then
+            echo "Missing repository secret: ${{ matrix.password_secret }}" >&2
+            exit 1
+          fi
+
+          sshpass -e ssh \
+            -o ConnectTimeout=15 \
+            -o StrictHostKeyChecking=accept-new \
+            -o ServerAliveInterval=10 \
+            root@${{ matrix.host }} \
+            "DEPLOY_SHA='${{ github.sha }}' bash -s" <<'REMOTE'
+          set -euo pipefail
+
+          repository_dir=/opt/scouts-eye/repository
+          compose_file="$repository_dir/deploy/docker-compose.prod.yml"
+
+          install -d -m 0755 /opt/scouts-eye
+          if [ -e "$repository_dir" ] && [ ! -d "$repository_dir/.git" ]; then
+            echo "$repository_dir exists but is not a Git checkout; refusing to overwrite it" >&2
+            exit 1
+          fi
+
+          if [ ! -d "$repository_dir/.git" ]; then
+            git clone https://github.com/Harvare1/scouts-eye.git "$repository_dir"
+          fi
+
+          git -C "$repository_dir" fetch --prune origin
+          git -C "$repository_dir" checkout --detach "$DEPLOY_SHA"
+
+          docker compose --project-name scouts-eye --file "$compose_file" up \
+            --detach --build --remove-orphans
+
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error http://127.0.0.1:8090/health; then
+              break
+            fi
+            if [ "$attempt" -eq 30 ]; then
+              docker compose --project-name scouts-eye --file "$compose_file" ps
+              docker compose --project-name scouts-eye --file "$compose_file" logs --tail 100
+              exit 1
+            fi
+            sleep 2
+          done
+
+          curl --fail --silent --show-error \
+            'http://127.0.0.1:8090/api/dossier?player=h_cm1&minute=90' \
+            | python3 -c 'import json, sys; body = json.load(sys.stdin); assert body["entries"]'
+
+          ufw allow from 103.177.249.207 to any port 8090 proto tcp \
+            comment 'Scout Eye via Proxy-LB' >/dev/null
+          docker compose --project-name scouts-eye --file "$compose_file" ps
+          REMOTE
+
+  configure-proxy:
+    name: Configure Proxy-LB
+    needs: deploy-apps
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SSHPASS: ${{ secrets.PROXY_LB_SSH_PASSWORD }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install SSH password helper
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes sshpass
+
+      - name: Upload Caddy site fragment
+        run: |
+          if [ -z "$SSHPASS" ]; then
+            echo "Missing repository secret: PROXY_LB_SSH_PASSWORD" >&2
+            exit 1
+          fi
+
+          sshpass -e scp \
+            -o ConnectTimeout=15 \
+            -o StrictHostKeyChecking=accept-new \
+            deploy/Caddyfile.scouts-eye \
+            root@103.177.249.207:/tmp/scouts-eye.caddy
+
+      - name: Validate backends and reload Caddy safely
+        run: |
+          sshpass -e ssh \
+            -o ConnectTimeout=15 \
+            -o StrictHostKeyChecking=accept-new \
+            root@103.177.249.207 'bash -s' <<'REMOTE'
+          set -euo pipefail
+
+          curl --fail --silent --show-error http://82.197.73.183:8090/health
+          curl --fail --silent --show-error http://207.2.123.192:8090/health
+
+          install -d -m 0755 /etc/caddy/sites /etc/caddy/backups
+          timestamp=$(date -u +%Y%m%dT%H%M%SZ)
+          backup=/etc/caddy/backups/Caddyfile.$timestamp
+          cp -a /etc/caddy/Caddyfile "$backup"
+
+          snippet_existed=false
+          if [ -e /etc/caddy/sites/scouts-eye.caddy ]; then
+            snippet_existed=true
+            cp -a /etc/caddy/sites/scouts-eye.caddy \
+              "/etc/caddy/backups/scouts-eye.caddy.$timestamp"
+          fi
+
+          install -m 0644 /tmp/scouts-eye.caddy /etc/caddy/sites/scouts-eye.caddy
+          if ! grep -Fqx 'import /etc/caddy/sites/*.caddy' /etc/caddy/Caddyfile; then
+            printf '\n# Managed site fragments\nimport /etc/caddy/sites/*.caddy\n' \
+              >> /etc/caddy/Caddyfile
+          fi
+
+          if ! caddy validate --config /etc/caddy/Caddyfile; then
+            cp -a "$backup" /etc/caddy/Caddyfile
+            if [ "$snippet_existed" = true ]; then
+              cp -a "/etc/caddy/backups/scouts-eye.caddy.$timestamp" \
+                /etc/caddy/sites/scouts-eye.caddy
+            else
+              rm -f /etc/caddy/sites/scouts-eye.caddy
+            fi
+            echo 'Caddy validation failed; configuration restored' >&2
+            exit 1
+          fi
+
+          if ! systemctl reload caddy; then
+            cp -a "$backup" /etc/caddy/Caddyfile
+            if [ "$snippet_existed" = true ]; then
+              cp -a "/etc/caddy/backups/scouts-eye.caddy.$timestamp" \
+                /etc/caddy/sites/scouts-eye.caddy
+            else
+              rm -f /etc/caddy/sites/scouts-eye.caddy
+            fi
+            caddy validate --config /etc/caddy/Caddyfile
+            systemctl reload caddy
+            echo 'Caddy reload failed; previous configuration restored' >&2
+            exit 1
+          fi
+          systemctl is-active --quiet caddy
+          REMOTE
+
+      - name: Check public endpoint when DNS is ready
+        run: |
+          if getent ahostsv4 scouts-eye.knegare.eu >/dev/null; then
+            curl --fail --show-error --silent \
+              --retry 6 --retry-delay 10 \
+              https://scouts-eye.knegare.eu/health
+          else
+            echo 'DNS is pending: add scouts-eye.knegare.eu -> 103.177.249.207'
+          fi
