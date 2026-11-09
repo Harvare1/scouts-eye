@@ -1,0 +1,4 @@
+{% extends 'base.html' %}{% block title %}Kunskapstest{% endblock %}{% block content %}
+<div class="eyebrow">Scout Academy / Test</div><h1 class="title">VAD HAR DU LÄRT DIG?</h1><p class="subtitle">För godkänt krävs 4 av 5 rätt. I en full kurs ska kunskapstestet kombineras med en praktisk scoutingrapport som granskas av en utbildare.</p>
+<form method="post" action="/courses/quiz"><input type="hidden" name="csrf" value="{{csrf}}">{% for q in questions %}<div class="card" style="margin-bottom:17px"><span class="eyebrow">Fråga {{loop.index}} av {{questions|length}}</span><h2 class="h3" style="margin:12px 0">{{q['q']}}</h2>{% set qi=loop.index0 %}{% for answer in q['a'] %}<label class="quiz-choice"><input type="radio" name="q{{qi}}" value="{{loop.index0}}" required> {{answer}}</label>{% endfor %}</div>{% endfor %}<button class="btn">Rätta svar →</button></form>
+{% endblock %}

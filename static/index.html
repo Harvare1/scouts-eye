@@ -1,66 +1,155 @@
-<!doctype html>
-<html lang="en">
+<!DOCTYPE html>
+<html lang="sv">
 <head>
-  <meta charset="utf-8" />
+  <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="description" content="Live, evidence-grounded scouting dossiers generated from synthetic match events." />
-  <title>Scout's Eye</title>
-  <link rel="stylesheet" href="style.css" />
+  <meta name="theme-color" content="#101713" />
+  <meta name="description" content="Andrablicken – ett oberoende svenskt scoutingnätverk under utveckling. Utbildning, matchanalys och riktiga scoutuppdrag för framtidens fotboll." />
+  <title>Andrablicken — Se det andra missar.</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800;900&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#101713;--bg2:#151f19;--panel:#1d2a22;--ink:#f0f0e8;--muted:#a7b3a6;--accent:#d7f179;--accent2:#bace64;--line:rgba(231,243,218,.16);--max:1232px;--font:'DM Sans',Arial,sans-serif;--display:'Barlow Condensed','Arial Narrow',Impact,sans-serif}
+    *,*::before,*::after{box-sizing:border-box}
+    html{scroll-behavior:smooth} body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);-webkit-font-smoothing:antialiased;overflow-x:hidden}
+    body::before{content:'';position:fixed;inset:0;z-index:-1;pointer-events:none;background-image:radial-gradient(rgba(255,255,255,.038) .5px,transparent .5px);background-size:9px 9px;opacity:.35}
+    a{color:inherit;text-decoration:none}button,input,textarea,select{font:inherit}button{cursor:pointer}button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid var(--accent);outline-offset:4px} .container{width:min(calc(100% - 84px),var(--max));margin-inline:auto}
+    .eyebrow{font-size:11px;text-transform:uppercase;font-weight:700;letter-spacing:.22em;color:var(--accent)}
+    .announce{background:var(--accent);color:#162119;text-align:center;padding:9px 16px;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+    .announce span{display:inline-flex;align-items:center;gap:12px}.announce b{border:1px solid rgba(0,0,0,.3);border-radius:100px;padding:2px 6px;font-size:9px}
+    .nav{background:rgba(16,23,19,.94);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:30;backdrop-filter:blur(18px)}.nav-inner{height:79px;display:flex;align-items:center;justify-content:space-between;gap:24px}
+    .logo{display:flex;align-items:center;gap:11px;flex-shrink:0}.logo-mark{width:42px;height:42px;border:1.5px solid var(--accent);display:flex;align-items:center;justify-content:center;border-radius:50%;font:800 26px var(--display);line-height:1;letter-spacing:-.075em;color:var(--accent)}.logo-text{display:flex;flex-direction:column;line-height:.91}.logo-text strong{font:800 27px var(--display);letter-spacing:.015em;text-transform:uppercase}.logo-text small{margin-top:6px;color:var(--muted);font-weight:700;letter-spacing:.22em;font-size:8px}
+    .nav-links{display:flex;gap:35px;align-items:center;font-size:12px;color:#c1cbbd;font-weight:700}.nav-links a:hover{color:var(--accent)}.btn{min-height:48px;display:inline-flex;align-items:center;justify-content:center;gap:12px;background:var(--accent);border:1px solid var(--accent);color:#162116;padding:0 20px;border-radius:3px;font-weight:800;font-size:12px;letter-spacing:.015em;transition:transform .2s ease,background .2s ease}.btn:hover{transform:translateY(-2px);background:#e2fa95}.btn.secondary{background:transparent;border-color:#73846f;color:#e9efe1}.btn.secondary:hover{background:rgba(215,241,121,.08);border-color:var(--accent)}.btn svg{width:16px;height:16px}
+    .menu-btn{display:none;background:none;color:var(--ink);border:1px solid var(--line);padding:10px;border-radius:3px}
+    .hero{position:relative;overflow:hidden;border-bottom:1px solid var(--line);background:radial-gradient(circle at 81% 48%,#26382b 0%,transparent 42%),linear-gradient(90deg,#111a14 0%,#101713 100%)}
+    .hero::after{content:'FOOTBALL INTELLIGENCE';position:absolute;right:-78px;top:36%;transform:rotate(90deg);color:rgba(229,244,207,.07);font:900 92px var(--display);letter-spacing:.05em;white-space:nowrap;pointer-events:none}
+    .hero-inner{display:grid;grid-template-columns:1.02fr .98fr;gap:45px;align-items:center;min-height:660px;padding-block:90px 100px}.hero-copy{position:relative;z-index:2}.kicker{display:inline-flex;align-items:center;gap:12px;margin-bottom:22px;font-size:11px;color:#c2cfbd;font-weight:700;letter-spacing:.15em;text-transform:uppercase}.kicker .dot{height:7px;width:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 5px rgba(215,241,121,.08)}
+    h1,h2,h3,p{margin-top:0}h1{font:900 clamp(88px,9.3vw,153px)/.77 var(--display);letter-spacing:-.005em;text-transform:uppercase;margin-bottom:30px}h1 .outline{color:transparent;-webkit-text-stroke:1.4px #dfe8d9;text-stroke:1.4px #dfe8d9;display:block}h1 .accent{color:var(--accent);display:block}
+    .hero-description{font-size:15px;max-width:480px;line-height:1.85;color:#bac8b8;margin-bottom:34px}.hero-actions{display:flex;gap:10px;flex-wrap:wrap}.hero-foot{display:flex;align-items:center;gap:18px;margin-top:51px;color:#8e9c8e;font-size:10px;letter-spacing:.14em;text-transform:uppercase;font-weight:700}.hero-foot i{width:38px;border-top:1px solid #8e9c8e;display:inline-block}
+    .hero-visual{position:relative;z-index:1;min-width:0;transform:translateY(15px)}.visual-frame{background:linear-gradient(145deg,#24392b,#101b16);border:1px solid rgba(229,246,208,.24);border-radius:6px;padding:15px;box-shadow:0 34px 80px rgba(0,0,0,.34);transform:rotate(2deg)}.visual-header{display:flex;justify-content:space-between;align-items:center;padding:9px 8px 19px}.visual-header .indicator{font-size:9px;letter-spacing:.18em;color:var(--accent);font-weight:700}.visual-header .fake-dots{display:flex;gap:5px}.fake-dots span{height:6px;width:6px;border-radius:50%;background:#56715a}.pitch{width:100%;height:auto;display:block;background:#23362a;border:1px solid rgba(215,241,121,.18)}.visual-overlay{background:#101713;padding:20px 24px;display:grid;grid-template-columns:1fr auto;align-items:center;gap:20px;border:1px solid rgba(215,241,121,.23);margin:-24px -22px 15px 23px;position:relative;z-index:2;box-shadow:0 20px 30px #0005}.visual-overlay strong{font:800 25px var(--display);letter-spacing:.035em}.visual-overlay p{margin:6px 0 0;color:#a9b9a9;font-size:10px;line-height:1.5}.visual-overlay .score{font:900 35px var(--display);color:var(--accent)}.corner-label{position:absolute;top:-20px;right:-16px;background:var(--accent);color:#152015;padding:9px 15px;font-size:10px;font-weight:800;letter-spacing:.1em;transform:rotate(6deg)}
+    .ticker{border-bottom:1px solid var(--line);background:#19241c}.ticker-inner{min-height:70px;display:flex;justify-content:space-between;gap:24px;align-items:center;flex-wrap:wrap;padding-block:12px}.ticker-item{display:flex;align-items:center;gap:13px;font:700 13px var(--display);text-transform:uppercase;letter-spacing:.16em;color:#bdcabb}.ticker-item svg{width:20px;height:20px;stroke:var(--accent)}
+    section{scroll-margin-top:94px}.section-head{display:flex;justify-content:space-between;gap:35px;align-items:end;margin-bottom:43px}.section-head h2,.club-copy h2,.join-intro h2{font:800 clamp(50px,6vw,86px)/.9 var(--display);text-transform:uppercase;letter-spacing:.012em;margin:13px 0 0}.section-head p{max-width:390px;color:var(--muted);font-size:13px;line-height:1.85;margin:0}.section-pad{padding:115px 0}
+    .journey-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border:1px solid var(--line)}.journey-card{background:#18231c;padding:36px 32px;min-height:294px;position:relative}.journey-no{font:800 65px/.8 var(--display);color:#3b4a3e;display:block;margin-bottom:53px}.journey-card h3{font:800 33px var(--display);margin:0 0 11px;text-transform:uppercase}.journey-card p{font-size:12px;line-height:1.8;color:#aebbaa;max-width:285px}.journey-card .arrow{position:absolute;right:28px;top:38px;color:var(--accent);font-size:25px}
+    .split-section{background:#e8ecdc;color:#121b14}.split-wrap{display:grid;grid-template-columns:1fr 1fr;gap:0;min-height:510px}.split-copy{padding:75px 70px 75px max(42px,calc((100vw - var(--max))/2));display:flex;flex-direction:column;justify-content:center}.split-copy .eyebrow{color:#5d7a3f}.split-copy h2{font:900 clamp(60px,6vw,94px)/.86 var(--display);text-transform:uppercase;margin:16px 0 24px}.split-copy p{max-width:420px;font-size:14px;line-height:1.85;color:#4d5b4b;margin-bottom:29px}.split-copy .btn{background:#19261c;border-color:#19261c;color:#edf3df;width:max-content}.split-copy .btn:hover{background:#344431}.split-graphic{position:relative;background:#243a2b;overflow:hidden;display:grid;place-items:center}.split-graphic::before{content:'';width:450px;height:450px;position:absolute;border:1px solid rgba(215,241,121,.24);border-radius:50%;box-shadow:0 0 0 68px rgba(215,241,121,.03),0 0 0 135px rgba(215,241,121,.025)}.split-graphic::after{content:'';width:1px;height:100%;background:rgba(215,241,121,.1);position:absolute;transform:rotate(43deg)}.graphic-card{width:min(78%,390px);position:relative;z-index:2;background:#111b15;border:1px solid rgba(215,241,121,.3);padding:29px;box-shadow:0 30px 50px #0004;transform:rotate(-3deg)}.graphic-card .tag{display:inline-block;color:#131f16;background:var(--accent);font-size:9px;font-weight:900;letter-spacing:.12em;padding:8px 10px}.graphic-card h3{font:800 34px var(--display);margin:18px 0 12px}.barline{display:flex;align-items:center;gap:15px;margin:16px 0;font-size:10px;color:#b3c2b5}.barline span:first-child{width:90px}.barline div{height:5px;background:#334439;flex:1}.barline i{height:100%;display:block;background:var(--accent)}.graphic-card small{color:#a2b09f;font-size:10px}
+    .courses{background:#131d17}.course-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}.course{border:1px solid var(--line);background:#1b281e;min-height:325px;padding:27px;display:flex;flex-direction:column;position:relative;overflow:hidden}.course::before{content:'';position:absolute;right:-50px;top:-65px;width:180px;height:180px;border:1px solid #d7f17922;border-radius:50%}.course-head{display:flex;justify-content:space-between;align-items:center;color:#98aa99;font-size:9px;letter-spacing:.13em;font-weight:700}.course-level{color:var(--accent);border:1px solid #d7f17950;padding:6px 9px}.course-icon{margin:47px 0 16px;font:800 69px/.8 var(--display);color:rgba(215,241,121,.25)}.course h3{font:800 34px/.92 var(--display);text-transform:uppercase;margin-bottom:13px}.course p{font-size:12px;color:#a7b7a6;line-height:1.7;margin-bottom:0}.course-footer{border-top:1px solid var(--line);margin-top:auto;padding-top:20px;font-size:10px;letter-spacing:.09em;color:#d1dfc5;display:flex;justify-content:space-between}.course-footer span:last-child{color:var(--accent)}
+    .clubs{background:#19241c}.clubs-layout{display:grid;grid-template-columns:.9fr 1.1fr;gap:9%;align-items:center}.club-copy p{color:#b3c2b1;font-size:13px;line-height:1.9;max-width:410px;margin:24px 0 28px}.feature-list{display:grid;grid-template-columns:1fr 1fr;gap:14px}.feature{border:1px solid var(--line);background:#101a14;padding:23px;min-height:168px}.feature svg{width:24px;height:24px;stroke:var(--accent)}.feature h3{font:800 22px var(--display);margin:17px 0 8px;text-transform:uppercase}.feature p{color:#a2afa0;font-size:11px;line-height:1.65;margin:0}
+    .join{background:var(--accent);color:#172319}.join-layout{display:grid;grid-template-columns:1fr 1fr;gap:90px;align-items:center}.join-intro .eyebrow{color:#536834}.join-intro h2{margin-bottom:27px}.join-intro p{max-width:480px;line-height:1.85;font-size:14px;color:#3f5337}.join-intro .note{display:flex;gap:12px;align-items:center;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;margin-top:40px}.join-intro .note span{height:6px;width:6px;border-radius:50%;background:#1c291d}
+    .form-wrap{background:#142017;color:var(--ink);padding:36px;border:1px solid #364b36;box-shadow:16px 16px 0 rgba(23,35,25,.17)}.form-wrap h3{font:800 35px var(--display);text-transform:uppercase;margin:7px 0 7px}.form-wrap .sub{font-size:11px;color:#a8baaa;line-height:1.7;margin-bottom:23px}.role-tabs{display:flex;gap:8px;margin-bottom:23px}.role-tabs button{flex:1;background:transparent;border:1px solid #5c6e57;padding:12px;color:#d2dfce;text-transform:uppercase;letter-spacing:.07em;font-size:10px;font-weight:800}.role-tabs button.active{background:var(--accent);border-color:var(--accent);color:#152019}.field{display:block;margin-bottom:15px}.field span{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.09em;color:#b7c7b4;margin-bottom:7px;font-weight:700}.field input,.field textarea{width:100%;background:#1c2c20;border:1px solid #40523d;color:#fff;border-radius:2px;padding:13px 14px;font-size:12px;outline:none}.field textarea{resize:vertical;min-height:78px}.field input:focus,.field textarea:focus{border-color:var(--accent)}.form-wrap .btn{width:100%;margin-top:3px}.form-wrap .disclaimer{color:#879b85;font-size:10px;line-height:1.65;margin:14px 0 0}.form-success{font-size:11px;color:var(--accent);display:none;margin-top:12px;line-height:1.5}.form-success.show{display:block}
+    .faq{padding:88px 0}.faq-grid{display:grid;grid-template-columns:.6fr 1.4fr;gap:75px}.faq h2{font:800 57px/.93 var(--display);text-transform:uppercase;margin:15px 0}.qa{border-bottom:1px solid var(--line);padding:19px 0}.qa summary{font-size:13px;font-weight:800;list-style:none;display:flex;justify-content:space-between;cursor:pointer;gap:20px}.qa summary::-webkit-details-marker{display:none}.qa summary::after{content:'+';font-size:23px;line-height:14px;color:var(--accent)}.qa[open] summary::after{content:'−'}.qa p{color:var(--muted);font-size:12px;line-height:1.8;padding:16px 28px 0 0;margin:0}
+    footer{border-top:1px solid var(--line);padding:34px 0 45px;background:#0d140f}.footer-inner{display:flex;justify-content:space-between;gap:40px;align-items:center}.footer-links{display:flex;gap:25px;color:#a2b19c;font-size:11px}.footer-bottom{color:#748571;font-size:10px;line-height:1.5;margin-top:19px}
+    @media(max-width:1000px){.nav-links{gap:18px}.hero-inner{min-height:570px;gap:23px}.hero-foot{margin-top:35px}.split-copy{padding-left:43px}.join-layout{gap:30px}.clubs-layout{gap:30px}}
+    @media(max-width:760px){.container{width:min(calc(100% - 36px),var(--max))}.nav-inner{height:67px}.nav-links{display:none;position:absolute;top:67px;left:0;right:0;background:#111b14;border-bottom:1px solid var(--line);padding:25px 18px;flex-direction:column;align-items:stretch;gap:20px}.nav-links.open{display:flex}.nav-cta{display:none}.menu-btn{display:block}.hero-inner{grid-template-columns:1fr;gap:35px;min-height:0;padding-block:68px 84px}.hero::after{display:none}h1{font-size:clamp(79px,17vw,137px);margin-bottom:23px}.hero-description{font-size:13px;max-width:560px}.hero-visual{max-width:520px;width:90%;margin:0 auto;transform:none}.visual-frame{transform:rotate(1.2deg)}.hero-foot{margin-top:30px}.ticker-inner{justify-content:center;gap:20px 32px}.ticker-item{font-size:11px}.section-pad{padding:78px 0}.section-head{display:block;margin-bottom:30px}.section-head h2,.club-copy h2,.join-intro h2{font-size:64px}.section-head p{margin-top:22px}.journey-grid{grid-template-columns:1fr}.journey-card{min-height:195px;padding:28px}.journey-no{margin-bottom:32px;font-size:45px}.split-wrap{grid-template-columns:minmax(0,1fr)}.split-copy{padding:63px 28px;min-width:0}.split-copy h2{font-size:56px}.split-graphic{min-height:380px}.course-grid{grid-template-columns:1fr}.course{min-height:270px}.course-icon{margin:26px 0}.clubs-layout,.join-layout,.faq-grid{grid-template-columns:1fr;gap:35px}.feature-list{gap:9px}.join .section-pad{padding-block:68px}.faq{padding:75px 0}.faq h2{font-size:54px}.footer-inner{align-items:flex-start;flex-direction:column}.footer-links{flex-wrap:wrap}}
+    @media(max-width:450px){.hero-visual{width:100%}.visual-overlay{margin:-22px -7px 10px 13px;padding:15px}.visual-overlay strong{font-size:20px}.visual-overlay .score{font-size:27px}.corner-label{right:-8px}.hero-actions .btn{width:100%}.section-head h2,.club-copy h2,.join-intro h2{font-size:53px}.feature-list{grid-template-columns:1fr}.form-wrap{padding:24px}.ticker-item{font-size:10px}}
+    @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*::before,*::after{transition:none!important}}
+  </style>
 </head>
 <body>
-  <header>
-    <h1>Scout's Eye <span class="live-dot"></span></h1>
-    <div class="subtitle">Live scouting dossiers, built from evidence as the match unfolds</div>
+  <div class="announce"><span><b>NYTT</b> Ett nytt scoutingnätverk tar form i Sverige</span></div>
+  <header class="nav">
+    <div class="container nav-inner">
+      <a href="#top" class="logo" aria-label="Andrablicken startsida">
+        <span class="logo-mark">A.</span><span class="logo-text"><strong>ANDRABLICKEN</strong><small>SCOUTING NETWORK</small></span>
+      </a>
+      <nav class="nav-links" id="main-nav" aria-label="Huvudmeny">
+        <a href="/login" style="color:#d7f179">Scoutportalen ↗</a><a href="#sa-funkar-det">Så fungerar det</a><a href="#utbildning">Utbildning</a><a href="#klubbar">För klubbar</a><a href="#fragor">Frågor & svar</a>
+      </nav>
+      <a href="/login" class="btn nav-cta">ÖPPNA PORTALEN <span aria-hidden="true">↗</span></a>
+      <button class="menu-btn" id="menu-button" aria-label="Öppna meny" aria-controls="main-nav" aria-expanded="false"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    </div>
   </header>
-
-  <main>
-    <aside class="roster-panel">
-      <div class="team-label home">Albion United</div>
-      <div id="homeRoster" class="roster"></div>
-      <div class="team-label away">Caldervale FC</div>
-      <div id="awayRoster" class="roster"></div>
-    </aside>
-
-    <section class="pitch-panel">
-      <svg id="pitch" viewBox="0 0 105 68" preserveAspectRatio="xMidYMid meet"></svg>
-      <div class="timeline">
-        <button id="playBtn">&#9654; Play</button>
-        <input id="scrubber" type="range" min="0" max="90" value="90" step="1" />
-        <span id="minuteLabel">90'</span>
-      </div>
-      <div class="legend">
-        <span><i class="dot pass"></i> pass</span>
-        <span><i class="dot duel-won"></i> duel won</span>
-        <span><i class="dot duel-lost"></i> duel lost</span>
-        <span><i class="dot foul"></i> foul</span>
-        <span><i class="dot shot"></i> shot</span>
+  <main id="top">
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="container hero-inner">
+        <div class="hero-copy">
+          <div class="kicker"><span class="dot"></span> Oberoende scoutingnätverk · Sverige</div>
+          <h1 id="hero-title">SE DET <span class="outline">ANDRA</span> <span class="accent">MISSAR.</span></h1>
+          <p class="hero-description">För alla som ser mer än bara resultatet. Vi bygger ett svenskt nätverk där scouter utvecklas, analyser delas och klubbar får tillgång till nya perspektiv på spelet.</p>
+          <div class="hero-actions"><a class="btn" href="/login">LOGGA IN <span aria-hidden="true">↗</span></a><a class="btn secondary" href="mailto:malte@soldalen.nu">KONTAKTA ANDRABLICKEN <span aria-hidden="true">↗</span></a></div>
+          <div class="hero-foot"><i></i> Under utveckling · För scouter och klubbar</div>
+        </div>
+        <div class="hero-visual" aria-label="Illustration av en taktisk matchanalys">
+          <div class="corner-label">SCOUTING / 001</div>
+          <div class="visual-frame"><div class="visual-header"><span class="indicator">ANDRABLICKEN / MATCH VIEW</span><div class="fake-dots"><span></span><span></span><span></span></div></div>
+            <svg class="pitch" viewBox="0 0 620 500" role="img" aria-label="Taktiktavla med spelarnas rörelsemönster">
+              <defs><pattern id="grass" width="50" height="50" patternUnits="userSpaceOnUse"><rect width="50" height="50" fill="#263d2e"/><rect width="25" height="50" fill="#294232"/></pattern><marker id="arrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0 0L6 3L0 6" fill="none" stroke="#d7f179" stroke-width="1.4"/></marker></defs>
+              <rect width="620" height="500" fill="url(#grass)"/>
+              <g fill="none" stroke="#c5d7c4" opacity=".37" stroke-width="2"><rect x="33" y="34" width="554" height="431"/><line x1="310" y1="34" x2="310" y2="465"/><circle cx="310" cy="249.5" r="59"/><circle cx="310" cy="249.5" r="2" fill="#c5d7c4"/><rect x="33" y="143" width="89" height="214"/><rect x="498" y="143" width="89" height="214"/><rect x="33" y="194" width="36" height="110"/><rect x="551" y="194" width="36" height="110"/><path d="M122 207a59 59 0 0 1 0 85M498 207a59 59 0 0 0 0 85"/></g>
+              <g fill="none" stroke="#d7f179" stroke-width="3" stroke-dasharray="8 8" marker-end="url(#arrow)"><path d="M210 170Q295 125 387 184"/><path d="M258 320Q335 325 431 265"/><path d="M358 380Q426 377 482 344"/></g>
+              <g font-family="Arial,sans-serif" font-weight="700" font-size="13" text-anchor="middle">
+                <g fill="#d7f179" stroke="#172218" stroke-width="3"><circle cx="196" cy="168" r="17"/><circle cx="255" cy="320" r="17"/><circle cx="357" cy="378" r="17"/><circle cx="403" cy="238" r="17"/><circle cx="298" cy="238" r="17"/><circle cx="220" cy="251" r="17"/></g>
+                <g fill="#172218" stroke="none"><text x="196" y="173">7</text><text x="255" y="325">6</text><text x="357" y="383">8</text><text x="403" y="243">9</text><text x="298" y="243">10</text><text x="220" y="256">4</text></g>
+                <g fill="#7e9785" stroke="#172218" stroke-width="2"><circle cx="455" cy="165" r="15"/><circle cx="488" cy="292" r="15"/><circle cx="382" cy="334" r="15"/><circle cx="516" cy="228" r="15"/></g>
+                <g fill="#f0f3eb" stroke="none"><text x="455" y="170">2</text><text x="488" y="297">3</text><text x="382" y="339">5</text><text x="516" y="233">6</text></g>
+              </g>
+              <g fill="#d7f179" opacity=".75"><circle cx="388" cy="186" r="4"/><circle cx="432" cy="264" r="4"/></g>
+              <text x="48" y="487" fill="#a3b8a5" font-family="Arial,sans-serif" font-size="9" letter-spacing="2">TACTICAL OBSERVATION / ILLUSTRATION</text>
+            </svg>
+          </div>
+          <div class="visual-overlay"><div><strong>MER ÄN EN MATCH.</strong><p>Spelarinblick. Matchmönster. Rekryteringsunderlag.</p></div><div class="score">90'</div></div>
+        </div>
       </div>
     </section>
-
-    <section class="dossier-panel">
-      <div id="playerHeader" class="player-header">Select a player</div>
-      <div id="statLine" class="stat-line"></div>
-      <div class="view-toggle">
-        <button class="mode-btn active" data-mode="analyst">Analyst view</button>
-        <button class="mode-btn" data-mode="fan">Plain-language view</button>
-        <select id="langSelect">
-          <option value="en">EN</option>
-          <option value="sv">SV</option>
-          <option value="es">ES</option>
-        </select>
+    <div class="ticker"><div class="container ticker-inner">
+      <div class="ticker-item"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18"/></svg> Scouting</div>
+      <div class="ticker-item"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.5"><rect x="3" y="4" width="18" height="16" rx="1"/><path d="M7 10h10M7 14h7"/></svg> Matchanalys</div>
+      <div class="ticker-item"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.5"><path d="M4 20l4-7 4 3 5-9 3 3"/><path d="M17 7h3v3"/></svg> Utveckling</div>
+      <div class="ticker-item"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.5"><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/></svg> Nätverk</div>
+    </div></div>
+    <section id="sa-funkar-det" class="section-pad">
+      <div class="container"><div class="section-head"><div><div class="eyebrow">01 / Konceptet</div><h2>FRÅN LÄKTAREN<br>TILL UPPDRAGET.</h2></div><p>Fotbollen är full av människor med blick för spelet. Vi vill skapa en väg från kunskap och ambition till trovärdiga analyser och verklig erfarenhet.</p></div>
+        <div class="journey-grid">
+          <article class="journey-card"><span class="journey-no">01</span><span class="arrow">↗</span><h3>LÄR DIG SE.</h3><p>Utveckla en metod för att identifiera spelarkvaliteter, analysera matcher och skriva rapporter som hjälper en klubb att fatta beslut.</p></article>
+          <article class="journey-card"><span class="journey-no">02</span><span class="arrow">↗</span><h3>VISA VAD DU KAN.</h3><p>Bygg en portfolio, genomför analysövningar och visa kvaliteten på dina observationer i ett strukturerat format.</p></article>
+          <article class="journey-card"><span class="journey-no">03</span><span class="arrow">↗</span><h3>GÖR SKILLNAD.</h3><p>När klubbnätverket etablerats ska kvalificerade scouter kunna söka matchuppdrag och bidra med konkreta underlag till klubbar.</p></article>
+        </div>
       </div>
-      <h2>Strengths</h2>
-      <div id="strengthList" class="entry-list"></div>
-      <h2>Watch points</h2>
-      <div id="watchList" class="entry-list"></div>
     </section>
+    <section class="split-section" aria-labelledby="split-title"><div class="split-wrap"><div class="split-copy"><div class="eyebrow">Nätverket</div><h2 id="split-title">ALLA SER<br>MATCHEN.<br>FÅ SER<br>HELHETEN.</h2><p>Vad en spelare gör utan boll. Varför ett lag tappar kontrollen. Vilka egenskaper som håller på nästa nivå. Vi tror på systematisk observation, tydliga slutsatser och en gemensam metod.</p><a class="btn" href="#anslut">VAR MED FRÅN START ↗</a></div><div class="split-graphic"><div class="graphic-card"><div class="tag">EXEMPEL / SPELARPROFIL</div><h3>EN RAPPORT.<br>FLERA PERSPEKTIV.</h3><div class="barline"><span>Spelförståelse</span><div><i style="width:82%"></i></div></div><div class="barline"><span>Positionering</span><div><i style="width:73%"></i></div></div><div class="barline"><span>Beslutsfattande</span><div><i style="width:88%"></i></div></div><div class="barline"><span>Intensitet</span><div><i style="width:67%"></i></div></div><small>Fiktiva värden för att illustrera rapportformatet.</small></div></div></div></section>
+    <section id="utbildning" class="section-pad courses"><div class="container"><div class="section-head"><div><div class="eyebrow">02 / Scouting Academy</div><h2>KUNSKAP SOM<br>ANVÄNDS.</h2></div><p>Planerade utbildningsspår med praktisk tillämpning. Innehåll, nivåer och examination utvecklas innan någon kurs öppnas för försäljning.</p></div><div class="course-grid">
+      <article class="course"><div class="course-head"><span>SCOUTING ACADEMY</span><span class="course-level">PLANERAD</span></div><div class="course-icon">01.</div><h3>INTRODUKTION<br>TILL SCOUTING</h3><p>Scoutens roll, matchobservation och grunderna i att värdera en spelare.</p><div class="course-footer"><span>GRUNDNIVÅ</span><span>INTRESSEANMÄLAN ↗</span></div></article>
+      <article class="course"><div class="course-head"><span>SCOUTING ACADEMY</span><span class="course-level">PLANERAD</span></div><div class="course-icon">02.</div><h3>SPELARANALYS<br>& TALANGID</h3><p>Positionsprofiler, urval, potential och dokumentation av observationer.</p><div class="course-footer"><span>FÖRDJUPNING</span><span>INTRESSEANMÄLAN ↗</span></div></article>
+      <article class="course"><div class="course-head"><span>SCOUTING ACADEMY</span><span class="course-level">PLANERAD</span></div><div class="course-icon">03.</div><h3>MATCH- &<br>MOTSTÅNDARANALYS</h3><p>Spelsätt, pressmönster, omställningar och beslutsunderlag inför match.</p><div class="course-footer"><span>FÖRDJUPNING</span><span>INTRESSEANMÄLAN ↗</span></div></article>
+    </div></div></section>
+    <section id="klubbar" class="section-pad clubs"><div class="container clubs-layout"><div class="club-copy"><div class="eyebrow">03 / För fotbollsklubbar</div><h2>NYA ÖGON.<br>BÄTTRE<br>UNDERLAG.</h2><p>Vi utvecklar en modell där klubbar kan få hjälp med matchbevakning, motståndaranalys och spelarscouting. Uppdragen kvalitetssäkras och anpassas efter klubbens behov.</p><a class="btn secondary" href="#anslut" data-role="club">ANMÄL KLUBBENS INTRESSE ↗</a></div><div class="feature-list">
+      <article class="feature"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.5"><path d="M3 17l6-6 4 3 8-9M16 5h5v5"/></svg><h3>MOTSTÅNDARANALYS</h3><p>Strukturerad kartläggning av motståndarens spelsätt, styrkor och svagheter.</p></article>
+      <article class="feature"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.5"><circle cx="10" cy="10" r="6"/><path d="m15 15 6 6M7 10h6M10 7v6"/></svg><h3>REKRYTERING</h3><p>Oberoende spelarobservationer utifrån klubbens positionskrav.</p></article>
+      <article class="feature"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.5"><path d="M4 4h16v16H4zM4 10h16M10 4v16"/></svg><h3>MATCHBEVAKNING</h3><p>Rapporter från utvalda matcher på plats eller via tillåtet videomaterial.</p></article>
+      <article class="feature"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.5"><path d="M4 20h16M6 16V8M12 16V4M18 16v-5"/></svg><h3>RAPPORTSTANDARD</h3><p>Jämförbara rapporter med tydliga observationer, belägg och rekommendationer.</p></article>
+    </div></div></section>
+    <section id="anslut" class="section-pad join"><div class="container join-layout"><div class="join-intro"><div class="eyebrow">04 / Var med från början</div><h2>VAR MED<br>NÄR VI<br>STARTAR.</h2><p>Andrablicken är under utveckling. Vi söker personer med intresse för scouting – och klubbar som vill påverka hur nätverket ska fungera.</p><div class="note"><span></span> Inga avgifter · Inga löften om uppdrag</div></div><div class="form-wrap"><div class="eyebrow">INTRESSEANMÄLAN</div><h3 id="form-heading">LÅT OSS HÖRAS.</h3><p class="sub">Skicka ett mejl med dina uppgifter så kan vi diskutera när plattformen öppnar. Formuläret använder ditt e-postprogram.</p><form id="interest-form"><div class="role-tabs" aria-label="Jag är"><button class="active" type="button" data-role-button="scout" aria-pressed="true">JAG ÄR SCOUT</button><button type="button" data-role-button="club" aria-pressed="false">JAG ÄR KLUBB</button></div><input type="hidden" id="role" value="Scout / intresserad"/>
+      <label class="field"><span>Ditt namn *</span><input name="name" id="name" placeholder="För- och efternamn" autocomplete="name" required maxlength="120"></label>
+      <label class="field"><span>E-post *</span><input name="email" id="email" type="email" placeholder="namn@exempel.se" autocomplete="email" required maxlength="200"></label>
+      <label class="field"><span id="affiliation-label">Erfarenhet / förening (frivilligt)</span><input name="affiliation" id="affiliation" placeholder="Berätta kort om din bakgrund" maxlength="240"></label>
+      <label class="field"><span>Meddelande (frivilligt)</span><textarea name="message" id="message" placeholder="Vad skulle du vilja bidra med eller få hjälp med?" maxlength="1200"></textarea></label>
+      <button class="btn" type="submit">SKAPA INTRESSEMEJL ↗</button><p class="disclaimer">Detta är en tidig konceptwebb. Inga uppgifter lagras på sidan. När du skickar öppnas din e-postapp med ett förifyllt mejl.</p><p class="form-success" id="form-result" role="status">Ett förifyllt mejl har öppnats i ditt e-postprogram. Skicka det där för att slutföra intresseanmälan.</p>
+    </form></div></div></section>
+    <section id="fragor" class="faq"><div class="container faq-grid"><div><div class="eyebrow">05 / Frågor & svar</div><h2>DET DU<br>UNDAR ÖVER.</h2></div><div>
+      <details class="qa"><summary>Kostar det att gå med?</summary><p>Planen är ett kostnadsfritt grundmedlemskap. Betalda kurser kan erbjudas senare, när kursinnehåll, examination och villkor finns på plats.</p></details>
+      <details class="qa"><summary>Finns det scoutuppdrag redan nu?</summary><p>Nej. Vi bygger nätverket och för dialog med klubbar. Eventuella uppdrag kommer att publiceras först när de är bekräftade.</p></details>
+      <details class="qa"><summary>Är kurserna officiellt certifierade?</summary><p>Nej. Vi har ännu inte lanserat kurser eller fått någon extern ackreditering. Eventuella egna kursintyg kommer att beskrivas korrekt och inte utges för att vara förbundslicenser.</p></details>
+      <details class="qa"><summary>Kan jag analysera matcher på video?</summary><p>Ja, med videomaterial som du eller klubben har rätt att använda. Ett eget matcharkiv ingår inte i den här första versionen.</p></details>
+    </div></div></section>
   </main>
-
-  <footer>
-    Every dossier line cites the exact synthetic event ids behind it &mdash;
-    this is a demo for Microsoft's Inside the Game hackathon, not a real player assessment.
-  </footer>
-
-  <script src="app.js"></script>
+  <footer><div class="container"><div class="footer-inner"><a href="#top" class="logo"><span class="logo-mark">A.</span><span class="logo-text"><strong>ANDRABLICKEN</strong><small>SCOUTING NETWORK</small></span></a><div class="footer-links"><a href="#sa-funkar-det">Konceptet</a><a href="#utbildning">Utbildning</a><a href="#klubbar">För klubbar</a><a href="mailto:malte@soldalen.nu?subject=Andrablicken%20-%20kontakt">Kontakt</a></div></div><p class="footer-bottom">© <span id="year">2026</span> Andrablicken · Arbetsnamn och koncept under utveckling · Ingen koppling till Svenska Fotbollförbundet eller PFSA.</p></div></footer>
+  <script>
+    (function(){
+      const contact='malte@soldalen.nu';
+      const menu=document.getElementById('menu-button');const nav=document.getElementById('main-nav');
+      menu.addEventListener('click',()=>{const open=nav.classList.toggle('open');menu.setAttribute('aria-expanded',String(open));menu.setAttribute('aria-label',open?'Stäng meny':'Öppna meny')});
+      nav.querySelectorAll('a').forEach(a=>a.addEventListener('click',()=>{nav.classList.remove('open');menu.setAttribute('aria-expanded','false')}));
+      const setRole=(role)=>{document.getElementById('role').value=role==='club'?'Fotbollsklubb':'Scout / intresserad';document.getElementById('affiliation-label').textContent=role==='club'?'Förening och roll (frivilligt)':'Erfarenhet / förening (frivilligt)';document.getElementById('affiliation').placeholder=role==='club'?'Exempel: IK Exempel, sportchef':'Berätta kort om din bakgrund';document.querySelectorAll('[data-role-button]').forEach(btn=>{const active=btn.dataset.roleButton===role;btn.classList.toggle('active',active);btn.setAttribute('aria-pressed',String(active))})};
+      document.querySelectorAll('[data-role-button]').forEach(b=>b.addEventListener('click',()=>setRole(b.dataset.roleButton)));
+      document.querySelectorAll('a[data-role]').forEach(a=>a.addEventListener('click',()=>setRole(a.dataset.role)));
+      document.getElementById('interest-form').addEventListener('submit',function(e){e.preventDefault();if(!this.reportValidity())return;
+        const role=document.getElementById('role').value, name=document.getElementById('name').value.trim(), email=document.getElementById('email').value.trim(), affiliation=document.getElementById('affiliation').value.trim(), message=document.getElementById('message').value.trim();
+        const subject='Intresseanmälan Andrablicken – '+role;
+        const body=['Hej!','', 'Jag vill anmäla intresse för Andrablicken.','', 'Roll: '+role,'Namn: '+name,'E-post: '+email,'Erfarenhet / förening: '+(affiliation||'Ej angivet'),'','Meddelande:',message||'Ej angivet','','Skickat via konceptwebbplatsen.'].join('\n');
+        window.location.href='mailto:'+contact+'?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body);
+        document.getElementById('form-result').classList.add('show');
+      });
+      document.getElementById('year').textContent=new Date().getFullYear();
+    })();
+  </script>
 </body>
 </html>

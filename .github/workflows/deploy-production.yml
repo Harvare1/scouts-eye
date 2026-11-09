@@ -1,4 +1,4 @@
-name: Deploy production
+name: Deploy Andrablicken
 
 on:
   workflow_dispatch:
@@ -7,7 +7,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: scouts-eye-production
+  group: andrablicken-production
   cancel-in-progress: false
 
 jobs:
@@ -18,27 +18,18 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install --requirement requirements.txt
+      - run: pip install --requirement requirements-dev.txt
       - run: pytest -q
+      - run: docker build --tag andrablicken:test .
 
-  deploy-apps:
-    name: Deploy ${{ matrix.label }}
+  deploy-app:
+    name: Deploy Andrablicken to appserver1
     needs: test
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - label: appserver1
-            host: 82.197.73.183
-            password_secret: APPSERVER1_SSH_PASSWORD
-          - label: appserver2
-            host: 207.2.123.192
-            password_secret: APPSERVER2_SSH_PASSWORD
-
+    timeout-minutes: 20
     env:
-      SSHPASS: ${{ secrets[matrix.password_secret] }}
+      SSHPASS: ${{ secrets.APPSERVER1_SSH_PASSWORD }}
+      ADMIN_PASSWORD: ${{ secrets.ANDRABLICKEN_ADMIN_PASSWORD }}
 
     steps:
       - name: Install SSH password helper
@@ -46,10 +37,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes sshpass
 
-      - name: Deploy exact revision with Docker Compose
+      - name: Prepare exact revision and persistent storage
         run: |
-          if [ -z "$SSHPASS" ]; then
-            echo "Missing repository secret: ${{ matrix.password_secret }}" >&2
+          if [ -z "$SSHPASS" ] || [ -z "$ADMIN_PASSWORD" ]; then
+            echo 'APPSERVER1_SSH_PASSWORD and ANDRABLICKEN_ADMIN_PASSWORD are required' >&2
             exit 1
           fi
 
@@ -57,53 +48,104 @@ jobs:
             -o ConnectTimeout=15 \
             -o StrictHostKeyChecking=accept-new \
             -o ServerAliveInterval=10 \
-            root@${{ matrix.host }} \
+            root@82.197.73.183 \
             "DEPLOY_SHA='${{ github.sha }}' bash -s" <<'REMOTE'
           set -euo pipefail
 
-          repository_dir=/opt/scouts-eye/repository
-          compose_file="$repository_dir/deploy/docker-compose.prod.yml"
+          repository_dir=/opt/andrablicken/repository
+          runtime_env=/opt/andrablicken/runtime.env
+          install -d -m 0755 /opt/andrablicken
+          install -d -o 10001 -g 10001 -m 0700 /opt/andrablicken/data
 
-          install -d -m 0755 /opt/scouts-eye
           if [ -e "$repository_dir" ] && [ ! -d "$repository_dir/.git" ]; then
             echo "$repository_dir exists but is not a Git checkout; refusing to overwrite it" >&2
             exit 1
           fi
-
           if [ ! -d "$repository_dir/.git" ]; then
             git clone https://github.com/Harvare1/scouts-eye.git "$repository_dir"
           fi
-
           git -C "$repository_dir" fetch --prune origin
           git -C "$repository_dir" checkout --detach "$DEPLOY_SHA"
 
-          docker compose --project-name scouts-eye --file "$compose_file" up \
-            --detach --build --remove-orphans
+          session_secret=''
+          if [ -f "$runtime_env" ]; then
+            session_secret=$(sed -n 's/^ANDRABLICKEN_SESSION_SECRET=//p' "$runtime_env" | head -n 1)
+          fi
+          if [ "${#session_secret}" -lt 32 ]; then
+            session_secret=$(openssl rand -hex 48)
+          fi
+          umask 077
+          {
+            printf 'ANDRABLICKEN_ENV=production\n'
+            printf 'ANDRABLICKEN_STORAGE=/app/data\n'
+            printf 'ANDRABLICKEN_SESSION_SECRET=%s\n' "$session_secret"
+            printf 'ANDRABLICKEN_ALLOWED_HOSTS=scouts-eye.knegare.eu,127.0.0.1,localhost,82.197.73.183\n'
+            printf 'ANDRABLICKEN_ALLOW_REGISTRATION=0\n'
+            printf 'ANDRABLICKEN_SEED_DEMO=0\n'
+            printf 'ANDRABLICKEN_BOOTSTRAP_ADMIN_EMAIL=malte@soldalen.nu\n'
+            printf 'ANDRABLICKEN_BOOTSTRAP_ADMIN_NAME=Malte Öberg\n'
+          } > "$runtime_env"
+          chmod 0600 "$runtime_env"
 
-          for attempt in $(seq 1 30); do
-            if curl --fail --silent --show-error http://127.0.0.1:8090/health; then
+          docker compose --project-name andrablicken \
+            --file "$repository_dir/deploy/docker-compose.prod.yml" build
+          REMOTE
+
+      - name: Bootstrap admin on an empty database
+        run: |
+          {
+            printf 'set -euo pipefail\n'
+            printf 'admin_password=%q\n' "$ADMIN_PASSWORD"
+            cat <<'REMOTE'
+          export ANDRABLICKEN_BOOTSTRAP_ADMIN_PASSWORD="$admin_password"
+          repository_dir=/opt/andrablicken/repository
+          docker compose --project-name andrablicken \
+            --file "$repository_dir/deploy/docker-compose.prod.yml" \
+            run --rm --no-deps \
+            -e ANDRABLICKEN_BOOTSTRAP_ADMIN_PASSWORD \
+            andrablicken python -c 'import app; print("admin bootstrap ready")'
+          unset ANDRABLICKEN_BOOTSTRAP_ADMIN_PASSWORD admin_password
+          REMOTE
+          } | sshpass -e ssh \
+            -o ConnectTimeout=15 \
+            -o StrictHostKeyChecking=accept-new \
+            root@82.197.73.183 'bash -s'
+
+      - name: Start and verify Andrablicken
+        run: |
+          sshpass -e ssh \
+            -o ConnectTimeout=15 \
+            -o StrictHostKeyChecking=accept-new \
+            root@82.197.73.183 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          repository_dir=/opt/andrablicken/repository
+          compose_file="$repository_dir/deploy/docker-compose.prod.yml"
+          docker compose --project-name andrablicken --file "$compose_file" up \
+            --detach --remove-orphans
+
+          for attempt in $(seq 1 40); do
+            if curl --fail --silent --show-error http://127.0.0.1:8091/health \
+              | python3 -c 'import json,sys; assert json.load(sys.stdin)=={"status":"ok","mode":"production"}'; then
               break
             fi
-            if [ "$attempt" -eq 30 ]; then
-              docker compose --project-name scouts-eye --file "$compose_file" ps
-              docker compose --project-name scouts-eye --file "$compose_file" logs --tail 100
+            if [ "$attempt" -eq 40 ]; then
+              docker compose --project-name andrablicken --file "$compose_file" ps
+              docker compose --project-name andrablicken --file "$compose_file" logs --tail 120
               exit 1
             fi
             sleep 2
           done
 
-          curl --fail --silent --show-error \
-            'http://127.0.0.1:8090/api/dossier?player=h_cm1&minute=90' \
-            | python3 -c 'import json, sys; body = json.load(sys.stdin); assert body["entries"]'
-
-          ufw allow from 103.177.249.207 to any port 8090 proto tcp \
-            comment 'Scout Eye via Proxy-LB' >/dev/null
-          docker compose --project-name scouts-eye --file "$compose_file" ps
+          curl --fail --silent --show-error http://127.0.0.1:8091/ \
+            | grep --quiet 'ANDRABLICKEN'
+          ufw allow from 103.177.249.207 to any port 8091 proto tcp \
+            comment 'Andrablicken via Proxy-LB' >/dev/null
+          docker compose --project-name andrablicken --file "$compose_file" ps
           REMOTE
 
-  configure-proxy:
-    name: Configure Proxy-LB
-    needs: deploy-apps
+  switch-proxy:
+    name: Switch Proxy-LB to Andrablicken
+    needs: deploy-app
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
@@ -111,96 +153,81 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
       - name: Install SSH password helper
         run: |
           sudo apt-get update
           sudo apt-get install --yes sshpass
 
-      - name: Upload Caddy site fragment
+      - name: Verify backend and upload Caddy route
         run: |
-          if [ -z "$SSHPASS" ]; then
-            echo "Missing repository secret: PROXY_LB_SSH_PASSWORD" >&2
-            exit 1
-          fi
+          sshpass -e ssh -o StrictHostKeyChecking=accept-new root@103.177.249.207 \
+            "curl --fail --silent --show-error http://82.197.73.183:8091/health"
+          sshpass -e scp -o StrictHostKeyChecking=accept-new \
+            deploy/Caddyfile.andrablicken \
+            root@103.177.249.207:/tmp/andrablicken.caddy
 
-          sshpass -e scp \
-            -o ConnectTimeout=15 \
-            -o StrictHostKeyChecking=accept-new \
-            deploy/Caddyfile.scouts-eye \
-            root@103.177.249.207:/tmp/scouts-eye.caddy
-
-      - name: Validate backends and reload Caddy safely
+      - name: Validate, switch and retain rollback backup
         run: |
-          sshpass -e ssh \
-            -o ConnectTimeout=15 \
-            -o StrictHostKeyChecking=accept-new \
+          sshpass -e ssh -o StrictHostKeyChecking=accept-new \
             root@103.177.249.207 'bash -s' <<'REMOTE'
           set -euo pipefail
-
-          curl --fail --silent --show-error http://82.197.73.183:8090/health
-          curl --fail --silent --show-error http://207.2.123.192:8090/health
-
           install -d -m 0755 /etc/caddy/sites /etc/caddy/backups
           timestamp=$(date -u +%Y%m%dT%H%M%SZ)
-          backup=/etc/caddy/backups/Caddyfile.$timestamp
-          cp -a /etc/caddy/Caddyfile "$backup"
-
-          snippet_existed=false
-          if [ -e /etc/caddy/sites/scouts-eye.caddy ]; then
-            snippet_existed=true
-            cp -a /etc/caddy/sites/scouts-eye.caddy \
-              "/etc/caddy/backups/scouts-eye.caddy.$timestamp"
+          backup=/etc/caddy/backups/scouts-eye.caddy.$timestamp
+          if [ -f /etc/caddy/sites/scouts-eye.caddy ]; then
+            cp -a /etc/caddy/sites/scouts-eye.caddy "$backup"
           fi
-
-          install -m 0644 /tmp/scouts-eye.caddy /etc/caddy/sites/scouts-eye.caddy
-          if ! grep -Fqx 'import /etc/caddy/sites/*.caddy' /etc/caddy/Caddyfile; then
-            printf '\n# Managed site fragments\nimport /etc/caddy/sites/*.caddy\n' \
-              >> /etc/caddy/Caddyfile
-          fi
+          install -m 0644 /tmp/andrablicken.caddy /etc/caddy/sites/scouts-eye.caddy
 
           if ! caddy validate --config /etc/caddy/Caddyfile; then
-            cp -a "$backup" /etc/caddy/Caddyfile
-            if [ "$snippet_existed" = true ]; then
-              cp -a "/etc/caddy/backups/scouts-eye.caddy.$timestamp" \
-                /etc/caddy/sites/scouts-eye.caddy
-            else
-              rm -f /etc/caddy/sites/scouts-eye.caddy
-            fi
-            echo 'Caddy validation failed; configuration restored' >&2
+            [ -f "$backup" ] && cp -a "$backup" /etc/caddy/sites/scouts-eye.caddy
+            echo 'Caddy validation failed; previous route restored' >&2
             exit 1
           fi
-
           if ! systemctl reload caddy; then
-            cp -a "$backup" /etc/caddy/Caddyfile
-            if [ "$snippet_existed" = true ]; then
-              cp -a "/etc/caddy/backups/scouts-eye.caddy.$timestamp" \
-                /etc/caddy/sites/scouts-eye.caddy
-            else
-              rm -f /etc/caddy/sites/scouts-eye.caddy
-            fi
+            [ -f "$backup" ] && cp -a "$backup" /etc/caddy/sites/scouts-eye.caddy
             caddy validate --config /etc/caddy/Caddyfile
             systemctl reload caddy
-            echo 'Caddy reload failed; previous configuration restored' >&2
+            echo 'Caddy reload failed; previous route restored' >&2
             exit 1
           fi
           systemctl is-active --quiet caddy
           REMOTE
 
-      - name: Check public endpoint when DNS is ready
+      - name: Verify public Andrablicken
         run: |
-          if getent ahostsv4 scouts-eye.knegare.eu >/dev/null; then
-            if ! curl --fail --show-error --silent \
-              --retry 12 --retry-delay 10 --retry-all-errors \
-              https://scouts-eye.knegare.eu/health; then
-              echo 'Public HTTPS check failed; recent Caddy logs follow' >&2
-              sshpass -e ssh \
-                -o ConnectTimeout=15 \
-                -o StrictHostKeyChecking=accept-new \
-                root@103.177.249.207 \
-                "journalctl --unit caddy --since '15 minutes ago' --no-pager --lines 200"
-              exit 1
-            fi
-          else
-            echo 'DNS is pending: add scouts-eye.knegare.eu -> 103.177.249.207'
+          curl --fail --show-error --silent \
+            --retry 12 --retry-delay 5 --retry-all-errors \
+            https://scouts-eye.knegare.eu/health \
+            | python3 -c 'import json,sys; assert json.load(sys.stdin)=={"status":"ok","mode":"production"}'
+          curl --fail --show-error --silent https://scouts-eye.knegare.eu/ \
+            | grep --quiet 'ANDRABLICKEN'
+
+  retire-old-app:
+    name: Retire old Scout's Eye containers
+    needs: switch-proxy
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - host: 82.197.73.183
+            password_secret: APPSERVER1_SSH_PASSWORD
+          - host: 207.2.123.192
+            password_secret: APPSERVER2_SSH_PASSWORD
+    env:
+      SSHPASS: ${{ secrets[matrix.password_secret] }}
+
+    steps:
+      - run: |
+          sudo apt-get update
+          sudo apt-get install --yes sshpass
+      - name: Stop only the replaced Compose project
+        run: |
+          sshpass -e ssh -o StrictHostKeyChecking=accept-new root@${{ matrix.host }} 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          old_compose=/opt/scouts-eye/repository/deploy/docker-compose.prod.yml
+          if [ -f "$old_compose" ]; then
+            docker compose --project-name scouts-eye --file "$old_compose" down
           fi
+          REMOTE

@@ -1,0 +1,10 @@
+<!doctype html>
+<html lang="sv"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0f1712"><title>{% block title %}Andrablicken{% endblock %} · Scouting Network</title><link rel="stylesheet" href="/static/portal.css"></head>
+<body>
+<header class="top"><div class="wrap">
+<a class="logo" href="{% if user %}/app{% else %}/{% endif %}"><span class="logo-icon">A</span><span class="logo-lines"><strong>ANDRABLICKEN</strong><small>SCOUTING NETWORK</small></span></a>
+<nav>{% if user %}<a href="/app">Uppdrag</a><a href="/courses">Scout Academy</a><a href="/static/spelarrapport-mall.pdf" target="_blank">Mallbibliotek</a><span class="small muted">{{user['name']}} · {{'Scout' if user['role']=='scout' else ('Klubb' if user['role']=='club' else 'Admin')}}</span><form class="logout" method="post" action="/logout"><input type="hidden" name="csrf" value="{{csrf}}"><button>Logga ut</button></form>{% else %}<a href="/">Startsidan</a>{% if allow_registration %}<a href="/register">Skapa konto</a>{% endif %}<a href="/login">Logga in</a>{% endif %}</nav>
+</div></header>
+<main class="wrap main">{% if flash %}<div class="flash">{{flash}}</div>{% endif %}{% block content %}{% endblock %}</main>
+<footer class="footer"><div class="wrap"><span>© Andrablicken · Pilotmiljö</span><span>Rapporter delas endast med behöriga användare i portalen.</span></div></footer>
+</body></html>
