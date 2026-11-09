@@ -78,6 +78,13 @@ jobs:
           section docker-containers
           docker ps --no-trunc --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}' 2>/dev/null || true
 
+          section docker-container-topology
+          for container_id in $(docker ps --quiet 2>/dev/null); do
+            docker inspect --format \
+              'name={{.Name}} image={{.Config.Image}} restart={{.HostConfig.RestartPolicy.Name}} ports={{json .HostConfig.PortBindings}} mounts={{json .Mounts}} networks={{json .NetworkSettings.Networks}}' \
+              "$container_id" 2>/dev/null || true
+          done
+
           section compose-projects
           docker compose ls --all 2>/dev/null || true
 
@@ -91,6 +98,24 @@ jobs:
           find /etc /opt /srv /root /home -maxdepth 5 -type f \
             \( -name 'compose.yml' -o -name 'compose.yaml' -o -name 'docker-compose.yml' -o -name 'docker-compose.yaml' \) \
             -print 2>/dev/null | sort
+
+          section caddy-config-paths
+          find /etc/caddy -maxdepth 3 -type f \
+            \( -name 'Caddyfile' -o -name '*.caddy' \) \
+            -print 2>/dev/null | sort
+
+          section redacted-caddy-config
+          while IFS= read -r caddy_file; do
+            printf '\n--- %s ---\n' "$caddy_file"
+            sed -E \
+              '/(password|passwd|secret|token|api[_-]?key|authorization|credential|private[_-]?key)/I s/.*/[REDACTED SENSITIVE LINE]/' \
+              "$caddy_file" 2>/dev/null || true
+          done < <(find /etc/caddy -maxdepth 3 -type f \
+            \( -name 'Caddyfile' -o -name '*.caddy' \) \
+            -print 2>/dev/null | sort)
+
+          section firewall
+          ufw status verbose 2>/dev/null || true
 
           section running-services
           systemctl list-units --type=service --state=running --no-pager --no-legend 2>/dev/null || true
