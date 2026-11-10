@@ -1,0 +1,76 @@
+digraph AndrablickenArchitecture {
+  graph [
+    rankdir=LR,
+    bgcolor="#F4F6F1",
+    pad="0.35",
+    nodesep="0.45",
+    ranksep="0.8",
+    fontname="Arial",
+    label="ANDRABLICKEN — SERVRAR, TRAFIK OCH CI/CD",
+    labelloc="t",
+    fontsize=24,
+    fontcolor="#142019"
+  ];
+  node [shape=box, style="rounded,filled", fontname="Arial", fontsize=11, color="#42634D", fontcolor="#142019", fillcolor="#FFFFFF", margin="0.16,0.11"];
+  edge [fontname="Arial", fontsize=9, color="#42634D", fontcolor="#294132", arrowsize=0.75, penwidth=1.4];
+
+  subgraph cluster_runtime {
+    label="PRODUKTIONSTRAFIK";
+    color="#9BB58B";
+    style="rounded";
+    penwidth=1.5;
+
+    users [label="ANVÄNDARE\nWebbläsare", fillcolor="#D7F179", color="#6F8731", penwidth=1.8];
+    dns [label="DNS HOS STRATO\nscouts-eye.knegare.eu\nA → 103.177.249.207", fillcolor="#EAF2DC"];
+    proxy [label="PROXY-LB\n103.177.249.207\nCaddy · HTTPS/TLS\nKomprimering + säkerhetsheaders", fillcolor="#203629", fontcolor="#FFFFFF", color="#D7F179", penwidth=2];
+    host [label="APPSERVER1\n82.197.73.183\nDocker Compose\nVärdport 8091", fillcolor="#DDE9D8"];
+    app [label="ANDRABLICKEN-CONTAINER\nFastAPI + Jinja2\nContainerport 8000\n/health", fillcolor="#D7F179", color="#6F8731", penwidth=1.8];
+    data [shape=cylinder, label="BESTÄNDIG DATA\n/opt/andrablicken/data\nSQLite + PDF-bilagor\nPå Appserver1", fillcolor="#FFF5CE", color="#A4862C"];
+
+    users -> dns [label="1. öppnar domänen"];
+    dns -> proxy [label="2. publik IP"];
+    proxy -> host [label="3. HTTP :8091\nendast från proxyn"];
+    host -> app [label="4. portmappning"];
+    app -> data [dir=both, label="5. läser/skriver"];
+  }
+
+  subgraph cluster_cicd {
+    label="CI/CD — GITHUB ACTIONS";
+    color="#5D7E66";
+    style="rounded";
+    penwidth=1.5;
+
+    developer [label="KODÄNDRING\ncommit + push till main", fillcolor="#FFFFFF"];
+    github [label="GITHUB\nHarvare1/scouts-eye\nmain", fillcolor="#203629", fontcolor="#FFFFFF", color="#D7F179", penwidth=2];
+    ci [label="1 · TEST\nInstallera beroenden\npytest\nDocker build", fillcolor="#EAF2DC"];
+    deploy [label="2 · DEPLOY APPSERVER1\nHämta exakt commit\nBygg + starta Compose\nKontrollera /health", fillcolor="#DDE9D8"];
+    switch [label="3 · VÄXLA PROXY\nTesta backend\nValidera Caddy\nLadda om + publik kontroll", fillcolor="#D7F179", color="#6F8731"];
+    retire [label="4 · STÄDA GAMMALT\nStoppa endast gamla\nScout's Eye-containrar", fillcolor="#F1F3EE"];
+    secrets [shape=note, label="GITHUB SECRETS\nSSH-lösenord\nAdmin-bootstrap\nVärden visas aldrig i workflow", fillcolor="#FFF5CE", color="#A4862C"];
+
+    developer -> github [label="push"];
+    github -> ci [label="manuell produktionskörning"];
+    ci -> deploy [label="bara om grönt"];
+    deploy -> switch [label="bara om appen är frisk"];
+    switch -> retire [label="bara om publika sidan fungerar"];
+    secrets -> deploy [style=dashed, label="skyddad åtkomst"];
+    secrets -> switch [style=dashed];
+  }
+
+  deploy -> host [style=dashed, color="#6F8731", label="SSH + Docker Compose", constraint=false];
+  switch -> proxy [style=dashed, color="#6F8731", label="SSH + Caddy", constraint=false];
+
+  subgraph cluster_reserve {
+    label="SERVRAR SOM INTE BÄR PRODUKTIONEN JUST NU";
+    color="#AEB7AF";
+    style="rounded,dashed";
+
+    app2 [label="APPSERVER2\n207.2.123.192\nGamla containrar stoppade\nReserv för framtida redundans", fillcolor="#F1F3EE", color="#8A958C"];
+    dbprod [label="DB-PROD\n207.2.123.155\nInte ansluten ännu\nPlanerad PostgreSQL senare", fillcolor="#F1F3EE", color="#8A958C"];
+    testapp [label="TESTAPP\n103.177.249.171\nLedig för framtida staging", fillcolor="#F1F3EE", color="#8A958C"];
+  }
+
+  app2 -> host [style=dotted, arrowhead=none, label="framtida appreplik", color="#8A958C"];
+  dbprod -> data [style=dotted, arrowhead=none, label="framtida DB-migrering", color="#8A958C"];
+  testapp -> ci [style=dotted, arrowhead=none, label="framtida teststeg", color="#8A958C"];
+}

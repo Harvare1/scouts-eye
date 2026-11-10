@@ -2,6 +2,8 @@
 
 Andrablicken är en svensk pilotplattform för fotbollsscouting. Den samlar klubbuppdrag, behöriga externa videolänkar, scoutrapporter, administrativ granskning, PDF-export och en mindre utbildningsdel.
 
+Serverroller, trafikflöde och GitHub Actions beskrivs med diagram i [docs/ARKITEKTUR.md](docs/ARKITEKTUR.md).
+
 ## Lokal utveckling
 
 ```sh

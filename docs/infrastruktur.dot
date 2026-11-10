@@ -1,0 +1,20 @@
+digraph Infrastructure {
+  graph [rankdir=LR, bgcolor="#F4F6F1", pad="0.35", nodesep="0.45", ranksep="0.7", fontname="Arial", label="ANDRABLICKEN — SÅ GÅR TRAFIKEN IDAG", labelloc="t", fontsize=24, fontcolor="#142019"];
+  node [shape=box, style="rounded,filled", fontname="Arial", fontsize=12, color="#42634D", fontcolor="#142019", fillcolor="#FFFFFF", margin="0.18,0.13"];
+  edge [fontname="Arial", fontsize=10, color="#42634D", fontcolor="#294132", arrowsize=0.8, penwidth=1.6];
+
+  user [label="1 · ANVÄNDARE\nöppnar webbplatsen", fillcolor="#D7F179", color="#6F8731", penwidth=2];
+  dns [label="2 · DNS / STRATO\nscouts-eye.knegare.eu\n→ 103.177.249.207", fillcolor="#EAF2DC"];
+  proxy [label="3 · PROXY-LB\n103.177.249.207\nCaddy sköter HTTPS\noch säkerhetsheaders", fillcolor="#203629", fontcolor="#FFFFFF", color="#D7F179", penwidth=2];
+  host [label="4 · APPSERVER1\n82.197.73.183\nDocker Compose\nPort 8091", fillcolor="#DDE9D8"];
+  app [label="5 · ANDRABLICKEN\nFastAPI-container\nPort 8000 + /health", fillcolor="#D7F179", color="#6F8731", penwidth=2];
+  data [shape=cylinder, label="6 · DATA\n/opt/andrablicken/data\nSQLite + PDF-bilagor\nPå Appserver1", fillcolor="#FFF5CE", color="#A4862C"];
+  reserve [shape=note, label="INTE AKTIVA I PRODUKTION NU\n\nAppserver2 · 207.2.123.192\nReserv för framtida replik\n\nDB-Prod · 207.2.123.155\nPlanerad PostgreSQL senare\n\ntestapp · 103.177.249.171\nPlanerad stagingmiljö", fillcolor="#F1F3EE", color="#8A958C"];
+
+  user -> dns [label="domännamn"];
+  dns -> proxy [label="publik IP"];
+  proxy -> host [label="HTTP :8091\nbrandvägg: endast proxyn"];
+  host -> app [label="Docker-portmappning"];
+  app -> data [label="läser och skriver"];
+  data -> reserve [style=dashed, arrowhead=none, color="#8A958C", label="framtida utbyggnad"];
+}

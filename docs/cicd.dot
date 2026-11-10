@@ -1,0 +1,25 @@
+digraph CICD {
+  graph [rankdir=LR, bgcolor="#F4F6F1", pad="0.35", nodesep="0.45", ranksep="0.75", fontname="Arial", label="ANDRABLICKEN — CI/CD MED GITHUB ACTIONS", labelloc="t", fontsize=24, fontcolor="#142019"];
+  node [shape=box, style="rounded,filled", fontname="Arial", fontsize=11, color="#42634D", fontcolor="#142019", fillcolor="#FFFFFF", margin="0.18,0.13"];
+  edge [fontname="Arial", fontsize=9, color="#42634D", fontcolor="#294132", arrowsize=0.8, penwidth=1.6];
+
+  code [label="KODÄNDRING\ncommit + push", fillcolor="#FFFFFF"];
+  github [label="GITHUB\nHarvare1/scouts-eye\nmain", fillcolor="#203629", fontcolor="#FFFFFF", color="#D7F179", penwidth=2];
+  trigger [label="MANUELL START\nDeploy Andrablicken", fillcolor="#EAF2DC"];
+  test [label="1 · TESTA\nInstallera beroenden\nKör pytest\nBygg Docker-image", fillcolor="#EAF2DC"];
+  deploy [label="2 · DRIFTSÄTT\nAppserver1\nHämta exakt commit\nBygg + starta Compose\nKontrollera /health", fillcolor="#DDE9D8"];
+  proxy [label="3 · VÄXLA PROXY\nProxy-LB\nTesta backend\nSäkerhetskopiera + validera Caddy\nKontrollera publik HTTPS", fillcolor="#D7F179", color="#6F8731", penwidth=2];
+  cleanup [label="4 · STÄDA\nStoppa gamla Scout's Eye-\ncontainrar först efter\ngodkänd publik kontroll", fillcolor="#F1F3EE"];
+  secrets [shape=note, label="GITHUB SECRETS\nSSH-lösenord + admin-bootstrap\nVärden skrivs aldrig i koden", fillcolor="#FFF5CE", color="#A4862C"];
+  rollback [shape=note, label="SÄKERHET I FLÖDET\nFel test → ingen deploy\nFel app → ingen proxyväxling\nFel Caddy → gammal regel återställs", fillcolor="#FFF5CE", color="#A4862C"];
+
+  code -> github [label="push till main"];
+  github -> trigger [label="versionen finns redo"];
+  trigger -> test;
+  test -> deploy [label="endast om grönt"];
+  deploy -> proxy [label="endast om appen är frisk"];
+  proxy -> cleanup [label="endast om sajten fungerar"];
+  secrets -> deploy [style=dashed, label="skyddad SSH"];
+  secrets -> proxy [style=dashed];
+  cleanup -> rollback [style=dashed, arrowhead=none];
+}
