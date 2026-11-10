@@ -1,0 +1,43 @@
+{% extends 'base.html' %}{% block title %}Mallbibliotek{% endblock %}{% block content %}
+<div class="eyebrow">Andrablicken / Mallbibliotek</div>
+<h1 class="title">VÄLJ RAPPORTMALL.</h1>
+<p class="subtitle">Ladda ner en tom mall för extern ifyllnad eller arbeta direkt i portalens digitala rapport. En färdig PDF kopplas till rätt uppdrag och blir synlig för klubben först efter administratörens godkännande.</p>
+
+<div class="grid cols2 template-grid">
+{% for template in [
+  {'kind':'player','label':'Spelarrapport','pages':8,'file':'spelarrapport-mall.pdf','download':'Andrablicken_Spelarrapport_8_sidor.pdf','description':'Individuell observation och spelarbedömning: identitet, matchkontext, teknik, taktik, fysik, mentalitet och rekommendation.'},
+  {'kind':'opposition','label':'Motståndarrapport','pages':16,'file':'motstandarrapport-mall.pdf','download':'Andrablicken_Motstandarrapport_16_sidor.pdf','description':'Matchanalys av lag: spelmodell, formationer, press, omställningar, fasta situationer, nyckelspelare och matchplan.'}
+] %}
+<section class="card template-card">
+  <div class="template-cover"><span>{{template.pages}} SIDOR</span><strong>{{template.label|upper}}</strong><small>SVENSK MALL / VERSION 1.0</small></div>
+  <h2 class="h2">{{template.label}}</h2>
+  <p class="muted">{{template.description}}</p>
+  <div class="buttons">
+    <a class="btn" href="/static/{{template.file}}" target="_blank" rel="noopener">Förhandsgranska →</a>
+    <a class="btn outline" href="/static/{{template.file}}" download="{{template.download}}">Ladda ner PDF ↓</a>
+  </div>
+
+  {% if user['role'] in ['scout','admin'] %}
+  <hr class="line">
+  <h3 class="h3">Ladda upp färdig {{template.label|lower}}</h3>
+  <p class="small muted">Välj rapporten för laget eller spelaren. Endast PDF, högst 8 MB.</p>
+  <div class="template-uploads">
+  {% for report in editable_reports if report['kind']==template.kind %}
+    <form class="upload-row" method="post" action="/reports/{{report['id']}}/attachment" enctype="multipart/form-data">
+      <input type="hidden" name="csrf" value="{{csrf}}">
+      <input type="hidden" name="return_to" value="mallbibliotek">
+      <div><strong>{{report['assignment_title']}}</strong><span>{{report['fixture']}} · {{report['club_name']}}</span>{% if report['uploaded_file'] %}<small>En PDF finns redan och ersätts vid ny uppladdning.</small>{% endif %}</div>
+      <label class="file-button"><span>Välj PDF</span><input type="file" name="file" accept="application/pdf,.pdf" required></label>
+      <button class="btn small outline" type="submit">Ladda upp</button>
+    </form>
+  {% else %}
+    <div class="info">Ingen redigerbar {{template.label|lower}} finns ännu. Öppna ett tilldelat uppdrag och skapa rapporttypen först.</div>
+  {% endfor %}
+  </div>
+  {% endif %}
+</section>
+{% endfor %}
+</div>
+
+{% if user['role']=='club' %}<div class="info" style="margin-top:20px">Klubbkonton kan ladda ner båda mallarna. Uppladdade rapporter visas under respektive uppdrag när de har granskats och godkänts.</div>{% endif %}
+{% endblock %}

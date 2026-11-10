@@ -61,8 +61,14 @@ def test_other_scout_cannot_open_assigned_task_by_guessing_url(monkeypatch, tmp_
     module = load_application(monkeypatch, tmp_path)
     with module.db() as connection:
         assignment = connection.execute(
-            "SELECT id FROM assignments WHERE scout_id IS NOT NULL LIMIT 1"
+            "SELECT id,scout_id FROM assignments WHERE scout_id IS NOT NULL LIMIT 1"
         ).fetchone()
+        now = "2026-11-10T12:00"
+        connection.execute(
+            "INSERT INTO reports(assignment_id,scout_id,kind,payload,status,created_at,updated_at) VALUES (?,?,?,?,?,?,?)",
+            (assignment["id"], assignment["scout_id"], "player", "{}", "draft", now, now),
+        )
+        private_report_id = connection.execute("SELECT last_insert_rowid() AS id").fetchone()["id"]
         connection.execute(
             "INSERT INTO users(name,username,email,password_hash,role,club_id) VALUES (?,?,?,?,?,NULL)",
             ("Annan scout", "other-scout", "other-scout@example.test", module.password_hash("another-password"), "scout"),
@@ -71,6 +77,21 @@ def test_other_scout_cannot_open_assigned_task_by_guessing_url(monkeypatch, tmp_
     with TestClient(module.app, base_url="http://testserver") as client:
         login(client, "other-scout", "another-password")
         assert client.get(f"/assignments/{assignment['id']}").status_code == 403
+        library = client.get("/mallbibliotek")
+        assert library.status_code == 200
+        assert f'/reports/{private_report_id}/attachment' not in library.text
+        response = client.post(
+            f"/reports/{private_report_id}/attachment",
+            data={"csrf": csrf_from(library), "return_to": "mallbibliotek"},
+            files={"file": ("stulen.pdf", b"%PDF-1.4\n%%EOF\n", "application/pdf")},
+        )
+        assert response.status_code == 403
+
+
+def test_template_library_requires_login(monkeypatch, tmp_path):
+    module = load_application(monkeypatch, tmp_path)
+    with TestClient(module.app, base_url="http://testserver") as client:
+        assert client.get("/mallbibliotek").status_code == 401
 
 
 def test_other_club_cannot_open_approved_report_or_attachment(monkeypatch, tmp_path):

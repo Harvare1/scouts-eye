@@ -82,17 +82,31 @@ def test_complete_assignment_report_review_and_tenant_flow(monkeypatch, tmp_path
             assert response.status_code == 303
             report_id = int(response.headers["location"].split("/reports/", 1)[1].split("/", 1)[0])
 
+            library = scout.get("/mallbibliotek")
+            assert library.status_code == 200
+            assert "Spelarrapport" in library.text
+            assert "Motståndarrapport" in library.text
+            assert "Testlaget – Motståndarna" in library.text
+            assert f'action="/reports/{report_id}/attachment"' in library.text
+            player_template = scout.get("/static/spelarrapport-mall.pdf")
+            opposition_template = scout.get("/static/motstandarrapport-mall.pdf")
+            assert player_template.content.startswith(b"%PDF-")
+            assert opposition_template.content.startswith(b"%PDF-")
+            assert len(player_template.content) > 80_000
+            assert len(opposition_template.content) > 90_000
+
             edit_page = scout.get(f"/reports/{report_id}/edit")
             assert 'id="report-form"' in edit_page.text
             assert 'id="attachment-form"' in edit_page.text
             assert '/static/report-form.js' in edit_page.text
             response = scout.post(
                 f"/reports/{report_id}/attachment",
-                data={"csrf": csrf_from(edit_page)},
+                data={"csrf": csrf_from(library), "return_to": "mallbibliotek"},
                 files={"file": ("bilaga.pdf", b"%PDF-1.4\n%%EOF\n", "application/pdf")},
                 follow_redirects=False,
             )
             assert response.status_code == 303
+            assert response.headers["location"] == "/mallbibliotek"
 
             edit_page = scout.get(f"/reports/{report_id}/edit")
             response = scout.post(
@@ -137,6 +151,10 @@ def test_complete_assignment_report_review_and_tenant_flow(monkeypatch, tmp_path
         attachment = club.get(f"/reports/{report_id}/attachment")
         assert attachment.status_code == 200
         assert attachment.content.startswith(b"%PDF-")
+        club_library = club.get("/mallbibliotek")
+        assert club_library.status_code == 200
+        assert "Klubbkonton kan ladda ner båda mallarna" in club_library.text
+        assert 'class="upload-row"' not in club_library.text
 
     with module.db() as connection:
         connection.execute("INSERT INTO clubs(name) VALUES (?)", ("Rival IF",))

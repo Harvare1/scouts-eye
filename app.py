@@ -256,6 +256,24 @@ async def register(request:Request,name:str=Form(...),username:str=Form(...),ema
 async def logout(request:Request,csrf:str=Form(...)):
     check_token(request,csrf);request.session.clear();return go('/')
 
+@app.get('/mallbibliotek',response_class=HTMLResponse)
+def template_library(request:Request):
+    u=require_user(request)
+    with db() as con:
+        query='''SELECT r.id,r.kind,r.status,r.uploaded_file,a.title AS assignment_title,
+                 a.fixture,c.name AS club_name
+                 FROM reports r
+                 JOIN assignments a ON a.id=r.assignment_id
+                 JOIN clubs c ON c.id=a.club_id
+                 WHERE r.status IN ('draft','changes_requested')'''
+        if u['role']=='admin':
+            editable_reports=con.execute(query+' ORDER BY r.updated_at DESC').fetchall()
+        elif u['role']=='scout':
+            editable_reports=con.execute(query+' AND r.scout_id=? ORDER BY r.updated_at DESC',(u['id'],)).fetchall()
+        else:
+            editable_reports=[]
+    return page(request,'template_library.html',editable_reports=editable_reports)
+
 @app.get('/account',response_class=HTMLResponse)
 def account_page(request:Request):
     require_user(request)
@@ -547,7 +565,7 @@ def report_attachment(request:Request,rid:int):
     return FileResponse(path,media_type='application/pdf',filename=f'bilaga-rapport-{rid}.pdf',headers={'Cache-Control':'private, no-store'})
 
 @app.post('/reports/{rid}/attachment')
-async def upload_attachment(request:Request,rid:int,file:UploadFile=File(...),csrf:str=Form(...)):
+async def upload_attachment(request:Request,rid:int,file:UploadFile=File(...),csrf:str=Form(...),return_to:str=Form('')):
     u=require_user(request,('scout','admin'));check_token(request,csrf);r=fetch_report(rid)
     if not r:raise HTTPException(404)
     if u['role']!='admin' and r['scout_id']!=u['id']:raise HTTPException(403)
@@ -564,7 +582,7 @@ async def upload_attachment(request:Request,rid:int,file:UploadFile=File(...),cs
         try:(UPLOADS/Path(old).name).unlink(missing_ok=True)
         except OSError:pass
     notice(request,'PDF-bilagan uppladdad. Den blir synlig för klubben efter godkännande.')
-    return go(f'/reports/{rid}/edit')
+    return go('/mallbibliotek' if return_to=='mallbibliotek' else f'/reports/{rid}/edit')
 
 @app.post('/reports/{rid}/review')
 async def review_report(request:Request,rid:int,decision:str=Form(...),review_note:str=Form(''),csrf:str=Form(...)):

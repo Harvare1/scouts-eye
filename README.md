@@ -44,6 +44,12 @@ Administratörer hanterar klubbar och användare på `/admin/users`. Där går d
 
 Vid start migreras äldre SQLite-databaser automatiskt med status och sessionsversion för användarkonton. Avstängning, lösenordsåterställning och kontoändringar avslutar äldre sessioner. Tillfälliga lösenord ska lämnas till användaren genom en separat säker kanal; e-postinbjudan och automatisk lösenordsåterställning ingår ännu inte i piloten.
 
+## Mallbibliotek och rapportfiler
+
+Inloggade användare når `/mallbibliotek` för att välja och ladda ner den 8-sidiga spelarrapportmallen eller den 16-sidiga motståndarrapportmallen. Scouter och administratörer kan därifrån ladda upp en färdig PDF till en redigerbar rapport för rätt uppdrag, match och klubb. Samma roll- och klubbkontroller gäller som i rapportflödet, och klubben ser filen först efter godkännande.
+
+PDF-bilagor lagras tillsammans med övrig beständig appdata under `/opt/andrablicken/data` på appservern. En separat filserver behövs inte för pilotens nuvarande eninstansdrift. Vid horisontell skalning ska filerna flyttas till delad objektlagring innan fler appinstanser startas.
+
 ## Säkerhetsgränser
 
 - Öppen registrering är avstängd i hostad pilot.
