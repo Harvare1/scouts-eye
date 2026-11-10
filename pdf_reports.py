@@ -25,6 +25,7 @@ DARK = HexColor('#101713'); DEEP=HexColor('#19271C'); LIME=HexColor('#d7f179')
 WHITE=HexColor('#F7F8F3'); INK=HexColor('#152118'); GREY=HexColor('#667569')
 LINE=HexColor('#D8E0D5'); PALE=HexColor('#F2F5EF')
 PAGE_W,PAGE_H=landscape(A4)
+PITCH_LENGTH_TO_WIDTH=105/68
 
 PLAYER_FIELDS = [
  ('scout_name','Scout'), ('player_name','Spelare'),('team','Lag'),('opponent','Motståndare'),
@@ -100,10 +101,17 @@ def _brand(c, title, page_no, total):
 def _cover(c, spec, report_kind, data):
     c.setFillColor(DARK);c.rect(0,0,PAGE_W,PAGE_H,fill=1,stroke=0)
     # Faint pitch marking, drawn with shapes not third-party graphics.
+    pitch_h=405
+    pitch_w=pitch_h/PITCH_LENGTH_TO_WIDTH
+    pitch_x=PAGE_W-210-pitch_w/2
+    pitch_y=90
     c.setStrokeColor(HexColor('#2B4934'));c.setLineWidth(1.5)
-    c.rect(PAGE_W-375,90,330,405,fill=0,stroke=1)
-    c.line(PAGE_W-375,295,PAGE_W-45,295); c.circle(PAGE_W-210,295,55,fill=0,stroke=1)
-    c.rect(PAGE_W-310,90,200,65,fill=0,stroke=1);c.rect(PAGE_W-310,430,200,65,fill=0,stroke=1)
+    c.rect(pitch_x,pitch_y,pitch_w,pitch_h,fill=0,stroke=1)
+    c.line(pitch_x,pitch_y+pitch_h/2,pitch_x+pitch_w,pitch_y+pitch_h/2)
+    c.circle(pitch_x+pitch_w/2,pitch_y+pitch_h/2,43,fill=0,stroke=1)
+    penalty_w=pitch_w*.61;penalty_h=pitch_h*.16;penalty_x=pitch_x+(pitch_w-penalty_w)/2
+    c.rect(penalty_x,pitch_y,penalty_w,penalty_h,fill=0,stroke=1)
+    c.rect(penalty_x,pitch_y+pitch_h-penalty_h,penalty_w,penalty_h,fill=0,stroke=1)
     c.setStrokeColor(LIME);c.setLineWidth(1.8);c.circle(58,PAGE_H-57,24,stroke=1,fill=0)
     c.setFillColor(LIME);c.setFont(BOLD,24);c.drawCentredString(58,PAGE_H-65,'A')
     c.setFillColor(WHITE);c.setFont(BOLD,22);c.drawString(96,PAGE_H-55,'ANDRABLICKEN')
@@ -177,12 +185,25 @@ def _field_block(c,x,top,w,h,title,keys,data,overflow,report_kind):
                     ly=cy-4-z*21
                     if ly>y+12:c.line(x+13,ly,x+w-13,ly)
 
+def _pitch_geometry(x,y,w,h):
+    """Fit a 105 x 68 pitch inside the available area without distortion."""
+    margin=18
+    caption_space=17
+    max_pw=max(1,w-2*margin)
+    max_ph=max(1,h-2*margin-caption_space)
+    pw=min(max_pw,max_ph*PITCH_LENGTH_TO_WIDTH)
+    ph=pw/PITCH_LENGTH_TO_WIDTH
+    frame_w=pw+2*margin
+    frame_h=ph+2*margin+caption_space
+    frame_x=x+(w-frame_w)/2
+    frame_y=y+(h-frame_h)/2
+    return frame_x,frame_y,frame_w,frame_h,frame_x+margin,frame_y+margin+caption_space,pw,ph
+
 def _pitch(c,x,y,w,h,markers=None):
     """Original football diagram, ready for pen annotation or digital player markers."""
+    frame_x,frame_y,frame_w,frame_h,px,py,pw,ph=_pitch_geometry(x,y,w,h)
     c.setFillColor(HexColor('#E5EDE4'))
-    c.roundRect(x,y,w,h,6,stroke=0,fill=1)
-    margin=18
-    px=x+margin;py=y+margin+17;pw=w-2*margin;ph=h-2*margin-24
+    c.roundRect(frame_x,frame_y,frame_w,frame_h,6,stroke=0,fill=1)
     c.setFillColor(HexColor('#D5E5D5'));c.rect(px,py,pw,ph,stroke=0,fill=1)
     c.setFillColor(HexColor('#CAE1CC'))
     for i in range(0,6,2):c.rect(px+(i/6)*pw,py,pw/6,ph,fill=1,stroke=0)
@@ -195,7 +216,7 @@ def _pitch(c,x,y,w,h,markers=None):
     c.rect(px,py+ph*.38,pw*.07,ph*.24,fill=0,stroke=1)
     c.rect(px+pw*.93,py+ph*.38,pw*.07,ph*.24,fill=0,stroke=1)
     c.setFillColor(GREY);c.setFont(REG,7)
-    c.drawString(px,y+8,'TACTICAL BOARD  /  MARKERA POSITIONER OCH RÖRELSER')
+    c.drawString(px,frame_y+8,'TACTICAL BOARD  /  MARKERA POSITIONER OCH RÖRELSER')
     for i,marker in enumerate((markers or [])[:30]):
         try:
             mx=max(0,min(1,float(marker.get('x',0.5))))

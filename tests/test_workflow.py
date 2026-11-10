@@ -92,8 +92,8 @@ def test_complete_assignment_report_review_and_tenant_flow(monkeypatch, tmp_path
             opposition_template = scout.get("/static/motstandarrapport-mall.pdf")
             assert player_template.content.startswith(b"%PDF-")
             assert opposition_template.content.startswith(b"%PDF-")
-            assert len(player_template.content) > 80_000
-            assert len(opposition_template.content) > 90_000
+            assert b"/Count 8" in player_template.content
+            assert b"/Count 16" in opposition_template.content
 
             edit_page = scout.get(f"/reports/{report_id}/edit")
             assert 'id="report-form"' in edit_page.text
