@@ -28,7 +28,7 @@
       ctx.fillStyle=m.team==='a'?'#152119':'#f4f5ee';ctx.textAlign='center';ctx.font='bold 11px system-ui';ctx.fillText(i+1,cx,cy+4);
     });
   }
-  function save(){field.value=JSON.stringify(markers);pitch()}
+  function save(){field.value=JSON.stringify(markers);field.dispatchEvent(new Event('input',{bubbles:true}));pitch()}
   function point(event){const r=canvas.getBoundingClientRect();const x=(event.clientX-r.left)*canvas.width/r.width;const y=(event.clientY-r.top)*canvas.height/r.height;return {x:Math.max(0,Math.min(1,(x-inner.x)/inner.w)),y:Math.max(0,Math.min(1,(y-inner.y)/inner.h))}}
   function near(p){return markers.findIndex(m=>Math.hypot((m.x-p.x)*inner.w,(m.y-p.y)*inner.h)<20)}
   canvas.addEventListener('pointerdown',ev=>{ev.preventDefault();const p=point(ev);dragged=near(p);if(dragged<0){if(markers.length>=30)return;markers.push({...p,team});dragged=markers.length-1;}canvas.setPointerCapture(ev.pointerId);save()});
