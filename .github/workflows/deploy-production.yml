@@ -82,6 +82,7 @@ jobs:
             printf 'ANDRABLICKEN_ALLOWED_HOSTS=scouts-eye.knegare.eu,127.0.0.1,localhost,82.197.73.183\n'
             printf 'ANDRABLICKEN_ALLOW_REGISTRATION=0\n'
             printf 'ANDRABLICKEN_SEED_DEMO=0\n'
+            printf 'ANDRABLICKEN_BOOTSTRAP_ADMIN_USERNAME=malte\n'
             printf 'ANDRABLICKEN_BOOTSTRAP_ADMIN_EMAIL=malte@soldalen.nu\n'
             printf 'ANDRABLICKEN_BOOTSTRAP_ADMIN_NAME=Malte Öberg\n'
           } > "$runtime_env"

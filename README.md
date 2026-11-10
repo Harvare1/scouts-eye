@@ -34,13 +34,13 @@ Den hostade pilotmiljön kräver:
 - `ANDRABLICKEN_ALLOW_REGISTRATION=0`
 - `ANDRABLICKEN_SEED_DEMO=0`
 
-På en tom databas krävs dessutom en engångsbootstrap via `ANDRABLICKEN_BOOTSTRAP_ADMIN_EMAIL` och `ANDRABLICKEN_BOOTSTRAP_ADMIN_PASSWORD`. Lösenordet lagras endast som PBKDF2-hash i databasen och ska tas bort ur processmiljön efter första starten.
+På en tom databas krävs dessutom en engångsbootstrap via `ANDRABLICKEN_BOOTSTRAP_ADMIN_USERNAME`, `ANDRABLICKEN_BOOTSTRAP_ADMIN_EMAIL` och `ANDRABLICKEN_BOOTSTRAP_ADMIN_PASSWORD`. Lösenordet lagras endast som PBKDF2-hash i databasen och ska tas bort ur processmiljön efter första starten.
 
 SQLite-databasen och uppladdningar lagras beständigt i `/opt/andrablicken/data` på appservern. Den nuvarande piloten kör därför en appinstans. Horisontell replikering kräver först migrering till PostgreSQL och delad objektlagring.
 
 ## Kontohantering
 
-Administratörer hanterar klubbar och användare på `/admin/users`. Där går det att skapa konton, ändra roll och klubbtillhörighet, stänga av eller aktivera konton och återställa lösenord. Alla användare kan byta sitt eget lösenord på `/account`.
+Administratörer hanterar klubbar och användare på `/admin/users`. Där går det att skapa unika användarnamn, spara kontakt-e-post, ändra roll och klubbtillhörighet, stänga av eller aktivera konton och återställa lösenord. Inloggning sker med användarnamn; e-postadressen används som kontaktuppgift. Alla användare kan byta sitt eget lösenord på `/account`.
 
 Vid start migreras äldre SQLite-databaser automatiskt med status och sessionsversion för användarkonton. Avstängning, lösenordsåterställning och kontoändringar avslutar äldre sessioner. Tillfälliga lösenord ska lämnas till användaren genom en separat säker kanal; e-postinbjudan och automatisk lösenordsåterställning ingår ännu inte i piloten.
 

@@ -90,11 +90,17 @@ def verify_password(password,stored):
         return hmac.compare_digest(candidate,bytes.fromhex(h))
     except Exception:return False
 
+def normalize_username(value):
+    username=(value or '').strip().lower()
+    if not re.fullmatch(r'[a-z0-9][a-z0-9._-]{2,31}',username):
+        raise ValueError('Användarnamnet ska vara 3–32 tecken och får innehålla a–z, 0–9, punkt, bindestreck och understreck.')
+    return username
+
 def init_db():
     with db() as con:
         con.executescript('''
         CREATE TABLE IF NOT EXISTS clubs(id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE);
-        CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY, name TEXT NOT NULL,email TEXT NOT NULL UNIQUE,password_hash TEXT NOT NULL,role TEXT NOT NULL CHECK(role IN ('admin','scout','club')),club_id INTEGER REFERENCES clubs(id));
+        CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY, name TEXT NOT NULL,username TEXT,email TEXT NOT NULL UNIQUE,password_hash TEXT NOT NULL,role TEXT NOT NULL CHECK(role IN ('admin','scout','club')),club_id INTEGER REFERENCES clubs(id));
         CREATE TABLE IF NOT EXISTS assignments(id INTEGER PRIMARY KEY, club_id INTEGER NOT NULL REFERENCES clubs(id),title TEXT NOT NULL,fixture TEXT NOT NULL,match_date TEXT,deadline TEXT,video_url TEXT,instructions TEXT,scout_id INTEGER REFERENCES users(id),created_at TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS applications(id INTEGER PRIMARY KEY,assignment_id INTEGER NOT NULL REFERENCES assignments(id),scout_id INTEGER NOT NULL REFERENCES users(id),created_at TEXT NOT NULL, UNIQUE(assignment_id,scout_id));
         CREATE TABLE IF NOT EXISTS reports(id INTEGER PRIMARY KEY,assignment_id INTEGER NOT NULL REFERENCES assignments(id),scout_id INTEGER NOT NULL REFERENCES users(id),kind TEXT NOT NULL CHECK(kind IN ('player','opposition')),payload TEXT NOT NULL DEFAULT '{}',status TEXT NOT NULL DEFAULT 'draft',review_note TEXT DEFAULT '',created_at TEXT NOT NULL,updated_at TEXT NOT NULL,uploaded_file TEXT);
@@ -102,17 +108,29 @@ def init_db():
         CREATE TABLE IF NOT EXISTS quiz_results(user_id INTEGER PRIMARY KEY REFERENCES users(id),best_score INTEGER NOT NULL,passed INTEGER NOT NULL,finished_at TEXT NOT NULL);
         ''')
         user_columns={row['name'] for row in con.execute('PRAGMA table_info(users)').fetchall()}
+        if 'username' not in user_columns:
+            con.execute('ALTER TABLE users ADD COLUMN username TEXT')
         if 'active' not in user_columns:
             con.execute('ALTER TABLE users ADD COLUMN active INTEGER NOT NULL DEFAULT 1')
         if 'session_version' not in user_columns:
             con.execute('ALTER TABLE users ADD COLUMN session_version INTEGER NOT NULL DEFAULT 1')
+        used_usernames={row['username'].lower() for row in con.execute("SELECT username FROM users WHERE username IS NOT NULL AND TRIM(username)<>''").fetchall()}
+        for existing in con.execute("SELECT id,email FROM users WHERE username IS NULL OR TRIM(username)='' ORDER BY id").fetchall():
+            base=re.sub(r'[^a-z0-9._-]+','-',existing['email'].split('@',1)[0].lower()).strip('._-')[:32]
+            if len(base)<3:base=f'user{existing["id"]}'
+            candidate=base;number=2
+            while candidate in used_usernames:
+                suffix=f'-{number}';candidate=base[:32-len(suffix)]+suffix;number+=1
+            con.execute('UPDATE users SET username=? WHERE id=?',(candidate,existing['id']))
+            used_usernames.add(candidate)
+        con.execute('CREATE UNIQUE INDEX IF NOT EXISTS users_username_nocase ON users(username COLLATE NOCASE)')
         con.execute('PRAGMA journal_mode=WAL')
         count=con.execute('SELECT COUNT(*) AS c FROM users').fetchone()['c']
         if not count and SEED_DEMO:
             con.execute('INSERT INTO clubs(name) VALUES (?)',('Demo IF',))
             club_id=con.execute('SELECT id FROM clubs WHERE name=?',('Demo IF',)).fetchone()['id']
-            for name,email,role,cid in [('Administratör','admin@andrablicken.demo','admin',None),('Demo Scout','scout@andrablicken.demo','scout',None),('Demo Sportchef','klubb@andrablicken.demo','club',club_id)]:
-                con.execute('INSERT INTO users(name,email,password_hash,role,club_id) VALUES (?,?,?,?,?)',(name,email,password_hash(DEMO_PASSWORD),role,cid))
+            for name,username,email,role,cid in [('Administratör','admin','admin@andrablicken.demo','admin',None),('Demo Scout','scout','scout@andrablicken.demo','scout',None),('Demo Sportchef','klubb','klubb@andrablicken.demo','club',club_id)]:
+                con.execute('INSERT INTO users(name,username,email,password_hash,role,club_id) VALUES (?,?,?,?,?,?)',(name,username,email,password_hash(DEMO_PASSWORD),role,cid))
             scout=con.execute("SELECT id FROM users WHERE role='scout'").fetchone()['id']
             now=datetime.now().isoformat(timespec='minutes')
             con.execute('INSERT INTO assignments(club_id,title,fixture,match_date,deadline,video_url,instructions,scout_id,created_at) VALUES (?,?,?,?,?,?,?,?,?)',
@@ -121,12 +139,15 @@ def init_db():
                         (club_id,'Pilot: Motståndaranalys','Exempellag C – Exempellag D','2026-11-08','2026-11-30','','Analysera press, omställningar och fasta situationer.',None,now))
         elif not count and PRODUCTION:
             email=os.environ.get('ANDRABLICKEN_BOOTSTRAP_ADMIN_EMAIL','').strip().lower()
+            username=os.environ.get('ANDRABLICKEN_BOOTSTRAP_ADMIN_USERNAME','').strip().lower()
             password=os.environ.get('ANDRABLICKEN_BOOTSTRAP_ADMIN_PASSWORD','')
             name=os.environ.get('ANDRABLICKEN_BOOTSTRAP_ADMIN_NAME','Administratör').strip()[:120]
-            if not re.fullmatch(r'[^@\s]+@[^@\s]+\.[^@\s]+',email) or len(password)<MIN_PASSWORD_LENGTH:
-                raise RuntimeError(f'En giltig bootstrap-admin och lösenord på minst {MIN_PASSWORD_LENGTH} tecken krävs för en tom produktionsdatabas.')
-            con.execute('INSERT INTO users(name,email,password_hash,role,club_id) VALUES (?,?,?,?,NULL)',
-                        (name,email,password_hash(password),'admin'))
+            try:username=normalize_username(username)
+            except ValueError:username=''
+            if not username or not re.fullmatch(r'[^@\s]+@[^@\s]+\.[^@\s]+',email) or len(password)<MIN_PASSWORD_LENGTH:
+                raise RuntimeError(f'Giltigt användarnamn, kontakt-e-post och lösenord på minst {MIN_PASSWORD_LENGTH} tecken krävs för en tom produktionsdatabas.')
+            con.execute('INSERT INTO users(name,username,email,password_hash,role,club_id) VALUES (?,?,?,?,?,NULL)',
+                        (name,username,email,password_hash(password),'admin'))
 init_db()
 
 def get_user(request):
@@ -192,11 +213,11 @@ def landing():return FileResponse(ROOT/'static'/'index.html')
 def login_page(request:Request):return page(request,'login.html')
 
 @app.post('/login')
-async def login(request:Request,email:str=Form(...),password:str=Form(...),csrf:str=Form(...)):
+async def login(request:Request,username:str=Form(...),password:str=Form(...),csrf:str=Form(...)):
     check_token(request,csrf)
-    with db() as con:u=con.execute('SELECT * FROM users WHERE email=?',(email.lower().strip(),)).fetchone()
+    with db() as con:u=con.execute('SELECT * FROM users WHERE username=? COLLATE NOCASE',(username.strip(),)).fetchone()
     if not u or not verify_password(password,u['password_hash']):
-        return page(request,'login.html',error='Fel e-postadress eller lösenord.')
+        return page(request,'login.html',error='Fel användarnamn eller lösenord.')
     if not u['active']:
         return page(request,'login.html',error='Kontot är avstängt. Kontakta administratören.')
     request.session.clear();request.session['uid']=u['id'];request.session['sv']=u['session_version'];request.session['csrf']=secrets.token_urlsafe(32)
@@ -208,12 +229,14 @@ def register_page(request:Request):
     return page(request,'register.html')
 
 @app.post('/register')
-async def register(request:Request,name:str=Form(...),email:str=Form(...),password:str=Form(...),role:str=Form(...),club_name:str=Form(''),csrf:str=Form(...)):
+async def register(request:Request,name:str=Form(...),username:str=Form(...),email:str=Form(...),password:str=Form(...),role:str=Form(...),club_name:str=Form(''),csrf:str=Form(...)):
     if not ALLOW_REGISTRATION:raise HTTPException(404)
     check_token(request,csrf)
     name=name.strip()[:120];email=email.strip().lower()[:254]
+    try:username=normalize_username(username)
+    except ValueError as exc:return page(request,'register.html',error=str(exc))
     if role not in ['club','scout'] or not name or not re.fullmatch(r'[^@\s]+@[^@\s]+\.[^@\s]+',email) or len(password)<MIN_PASSWORD_LENGTH:
-        return page(request,'register.html',error=f'Ange korrekt namn, e-postadress och lösenord (minst {MIN_PASSWORD_LENGTH} tecken).')
+        return page(request,'register.html',error=f'Ange korrekt namn, kontakt-e-post och lösenord (minst {MIN_PASSWORD_LENGTH} tecken).')
     if role=='club' and not club_name.strip():return page(request,'register.html',error='Ange klubbnamn.')
     try:
         with db() as con:
@@ -223,9 +246,9 @@ async def register(request:Request,name:str=Form(...),email:str=Form(...),passwo
                 if existing:return page(request,'register.html',error='Klubbnamnet finns redan i pilotportalen. Kontakta administratören.')
                 con.execute('INSERT INTO clubs(name) VALUES (?)',(club_name.strip()[:120],))
                 club_id=con.execute('SELECT last_insert_rowid() AS id').fetchone()['id']
-            con.execute('INSERT INTO users(name,email,password_hash,role,club_id) VALUES (?,?,?,?,?)',(name,email,password_hash(password),role,club_id))
+            con.execute('INSERT INTO users(name,username,email,password_hash,role,club_id) VALUES (?,?,?,?,?,?)',(name,username,email,password_hash(password),role,club_id))
             uid=con.execute('SELECT last_insert_rowid() AS id').fetchone()['id']
-    except sqlite3.IntegrityError:return page(request,'register.html',error='E-postadressen är redan registrerad.')
+    except sqlite3.IntegrityError:return page(request,'register.html',error='Användarnamnet eller e-postadressen används redan.')
     request.session.clear();request.session['uid']=uid;request.session['sv']=1;request.session['csrf']=secrets.token_urlsafe(32)
     return go('/app')
 
@@ -254,8 +277,9 @@ async def change_password(request:Request,current_password:str=Form(...),new_pas
     notice(request,'Lösenordet har ändrats. Andra inloggade sessioner har avslutats.')
     return go('/account')
 
-def admin_form_values(name,email,role,club_id):
+def admin_form_values(name,username,email,role,club_id):
     name=name.strip()[:120]
+    username=normalize_username(username)
     email=email.strip().lower()[:254]
     if not name or not re.fullmatch(r'[^@\s]+@[^@\s]+\.[^@\s]+',email):
         raise ValueError('Ange ett namn och en giltig e-postadress.')
@@ -264,7 +288,7 @@ def admin_form_values(name,email,role,club_id):
     selected_club=int(club_id) if role=='club' and str(club_id).isdigit() else None
     if role=='club' and selected_club is None:
         raise ValueError('Ett klubbkonto måste kopplas till en klubb.')
-    return name,email,role,selected_club
+    return name,username,email,role,selected_club
 
 @app.get('/admin/users',response_class=HTMLResponse)
 def admin_users_page(request:Request):
@@ -288,9 +312,9 @@ async def admin_create_club(request:Request,name:str=Form(...),csrf:str=Form(...
     return go('/admin/users')
 
 @app.post('/admin/users')
-async def admin_create_user(request:Request,name:str=Form(...),email:str=Form(...),role:str=Form(...),club_id:str=Form(''),password:str=Form(...),confirm_password:str=Form(...),csrf:str=Form(...)):
+async def admin_create_user(request:Request,name:str=Form(...),username:str=Form(...),email:str=Form(...),role:str=Form(...),club_id:str=Form(''),password:str=Form(...),confirm_password:str=Form(...),csrf:str=Form(...)):
     require_user(request,('admin',));check_token(request,csrf)
-    try:name,email,role,selected_club=admin_form_values(name,email,role,club_id)
+    try:name,username,email,role,selected_club=admin_form_values(name,username,email,role,club_id)
     except ValueError as exc:
         notice(request,str(exc));return go('/admin/users')
     if password!=confirm_password or len(password)<MIN_PASSWORD_LENGTH:
@@ -299,9 +323,9 @@ async def admin_create_user(request:Request,name:str=Form(...),email:str=Form(..
     try:
         with db() as con:
             if selected_club and not con.execute('SELECT 1 FROM clubs WHERE id=?',(selected_club,)).fetchone():raise ValueError('Klubben finns inte.')
-            con.execute('INSERT INTO users(name,email,password_hash,role,club_id,active,session_version) VALUES (?,?,?,?,?,1,1)',(name,email,password_hash(password),role,selected_club))
+            con.execute('INSERT INTO users(name,username,email,password_hash,role,club_id,active,session_version) VALUES (?,?,?,?,?,?,1,1)',(name,username,email,password_hash(password),role,selected_club))
     except sqlite3.IntegrityError:
-        notice(request,'E-postadressen används redan.')
+        notice(request,'Användarnamnet eller e-postadressen används redan.')
         return go('/admin/users')
     except ValueError as exc:
         notice(request,str(exc));return go('/admin/users')
@@ -309,9 +333,9 @@ async def admin_create_user(request:Request,name:str=Form(...),email:str=Form(..
     return go('/admin/users')
 
 @app.post('/admin/users/{user_id}/update')
-async def admin_update_user(request:Request,user_id:int,name:str=Form(...),email:str=Form(...),role:str=Form(...),club_id:str=Form(''),csrf:str=Form(...)):
+async def admin_update_user(request:Request,user_id:int,name:str=Form(...),username:str=Form(...),email:str=Form(...),role:str=Form(...),club_id:str=Form(''),csrf:str=Form(...)):
     admin=require_user(request,('admin',));check_token(request,csrf)
-    try:name,email,role,selected_club=admin_form_values(name,email,role,club_id)
+    try:name,username,email,role,selected_club=admin_form_values(name,username,email,role,club_id)
     except ValueError as exc:
         notice(request,str(exc));return go('/admin/users')
     with db() as con:
@@ -325,9 +349,9 @@ async def admin_update_user(request:Request,user_id:int,name:str=Form(...),email
         if user_id==admin['id'] and role!='admin':
             notice(request,'Du kan inte ta bort din egen administratörsroll.');return go('/admin/users')
         try:
-            con.execute('UPDATE users SET name=?,email=?,role=?,club_id=?,session_version=session_version+1 WHERE id=?',(name,email,role,selected_club,user_id))
+            con.execute('UPDATE users SET name=?,username=?,email=?,role=?,club_id=?,session_version=session_version+1 WHERE id=?',(name,username,email,role,selected_club,user_id))
         except sqlite3.IntegrityError:
-            notice(request,'E-postadressen används redan.');return go('/admin/users')
+            notice(request,'Användarnamnet eller e-postadressen används redan.');return go('/admin/users')
         new_version=con.execute('SELECT session_version FROM users WHERE id=?',(user_id,)).fetchone()['session_version']
     if user_id==admin['id']:request.session['sv']=new_version
     notice(request,f'Kontot för {name} har uppdaterats.')

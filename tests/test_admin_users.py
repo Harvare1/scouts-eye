@@ -18,6 +18,7 @@ def load_application(monkeypatch, tmp_path):
     monkeypatch.setenv("ANDRABLICKEN_ALLOWED_HOSTS", "testserver")
     monkeypatch.setenv("ANDRABLICKEN_ALLOW_REGISTRATION", "0")
     monkeypatch.setenv("ANDRABLICKEN_SEED_DEMO", "0")
+    monkeypatch.setenv("ANDRABLICKEN_BOOTSTRAP_ADMIN_USERNAME", "admin")
     monkeypatch.setenv("ANDRABLICKEN_BOOTSTRAP_ADMIN_EMAIL", "admin@example.test")
     monkeypatch.setenv("ANDRABLICKEN_BOOTSTRAP_ADMIN_PASSWORD", ADMIN_PASSWORD)
     sys.modules.pop("app", None)
@@ -30,11 +31,11 @@ def csrf_from(response):
     return match.group(1)
 
 
-def login(client, email, password):
+def login(client, username, password):
     response = client.post(
         "/login",
         data={
-            "email": email,
+            "username": username,
             "password": password,
             "csrf": csrf_from(client.get("/login")),
         },
@@ -56,7 +57,7 @@ def admin_post(client, path, data):
 def test_admin_can_manage_accounts_and_sessions(monkeypatch, tmp_path):
     module = load_application(monkeypatch, tmp_path)
     with TestClient(module.app, base_url="https://testserver") as admin:
-        assert login(admin, "admin@example.test", ADMIN_PASSWORD).status_code == 303
+        assert login(admin, "admin", ADMIN_PASSWORD).status_code == 303
         users_page = admin.get("/admin/users")
         assert users_page.status_code == 200
         assert "KLUBBAR & KONTON" in users_page.text
@@ -75,6 +76,7 @@ def test_admin_can_manage_accounts_and_sessions(monkeypatch, tmp_path):
             "/admin/users",
             {
                 "name": "För kort lösenord",
+                "username": "short-user",
                 "email": "short@example.test",
                 "role": "scout",
                 "club_id": "",
@@ -91,6 +93,7 @@ def test_admin_can_manage_accounts_and_sessions(monkeypatch, tmp_path):
             "/admin/users",
             {
                 "name": "Test Scout",
+                "username": "test-scout",
                 "email": "scout@example.test",
                 "role": "scout",
                 "club_id": "",
@@ -104,6 +107,7 @@ def test_admin_can_manage_accounts_and_sessions(monkeypatch, tmp_path):
             "/admin/users",
             {
                 "name": "Pilotens sportchef",
+                "username": "pilot-club",
                 "email": "club@example.test",
                 "role": "club",
                 "club_id": str(pilot_id),
@@ -118,16 +122,21 @@ def test_admin_can_manage_accounts_and_sessions(monkeypatch, tmp_path):
             admin_id = connection.execute("SELECT id FROM users WHERE email='admin@example.test'").fetchone()["id"]
 
         with TestClient(module.app, base_url="https://testserver") as scout:
-            assert login(scout, "scout@example.test", SCOUT_PASSWORD).status_code == 303
+            assert login(scout, "test-scout", SCOUT_PASSWORD).status_code == 303
             assert scout.get("/app").status_code == 200
             assert scout.get("/admin/users").status_code == 403
+
+            with TestClient(module.app, base_url="https://testserver") as email_client:
+                email_login = login(email_client, "scout@example.test", SCOUT_PASSWORD)
+                assert email_login.status_code == 200
+                assert "Fel användarnamn eller lösenord" in email_login.text
 
             response = admin_post(admin, f"/admin/users/{scout_id}/status", {"action": "deactivate"})
             assert response.status_code == 303
             assert scout.get("/app").status_code == 401
 
         with TestClient(module.app, base_url="https://testserver") as inactive:
-            response = login(inactive, "scout@example.test", SCOUT_PASSWORD)
+            response = login(inactive, "test-scout", SCOUT_PASSWORD)
             assert response.status_code == 200
             assert "Kontot är avstängt" in response.text
 
@@ -139,8 +148,8 @@ def test_admin_can_manage_accounts_and_sessions(monkeypatch, tmp_path):
         ).status_code == 303
 
         with TestClient(module.app, base_url="https://testserver") as changed:
-            assert login(changed, "scout@example.test", SCOUT_PASSWORD).status_code == 200
-            assert login(changed, "scout@example.test", RESET_PASSWORD).status_code == 303
+            assert login(changed, "test-scout", SCOUT_PASSWORD).status_code == 200
+            assert login(changed, "test-scout", RESET_PASSWORD).status_code == 303
             account = changed.get("/account")
             response = changed.post(
                 "/account/password",
@@ -156,14 +165,15 @@ def test_admin_can_manage_accounts_and_sessions(monkeypatch, tmp_path):
             assert changed.get("/app").status_code == 200
 
         with TestClient(module.app, base_url="https://testserver") as final_login:
-            assert login(final_login, "scout@example.test", RESET_PASSWORD).status_code == 200
-            assert login(final_login, "scout@example.test", FINAL_PASSWORD).status_code == 303
+            assert login(final_login, "test-scout", RESET_PASSWORD).status_code == 200
+            assert login(final_login, "test-scout", FINAL_PASSWORD).status_code == 303
 
         response = admin_post(
             admin,
             f"/admin/users/{club_user_id}/update",
             {
                 "name": "Pilotens sportchef",
+                "username": "pilot-club",
                 "email": "club@example.test",
                 "role": "club",
                 "club_id": str(other_id),
@@ -172,6 +182,21 @@ def test_admin_can_manage_accounts_and_sessions(monkeypatch, tmp_path):
         assert response.status_code == 303
         with module.db() as connection:
             assert connection.execute("SELECT club_id FROM users WHERE id=?", (club_user_id,)).fetchone()["club_id"] == other_id
+
+        duplicate = admin_post(
+            admin,
+            f"/admin/users/{club_user_id}/update",
+            {
+                "name": "Pilotens sportchef",
+                "username": "TEST-SCOUT",
+                "email": "club@example.test",
+                "role": "club",
+                "club_id": str(other_id),
+            },
+        )
+        assert duplicate.status_code == 303
+        with module.db() as connection:
+            assert connection.execute("SELECT username FROM users WHERE id=?", (club_user_id,)).fetchone()["username"] == "pilot-club"
 
         response = admin_post(admin, f"/admin/users/{admin_id}/status", {"action": "deactivate"})
         assert response.status_code == 303

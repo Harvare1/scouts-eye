@@ -25,11 +25,11 @@ def csrf_from(response):
     return match.group(1)
 
 
-def login(client, email, password=DEMO_PASSWORD):
+def login(client, username, password=DEMO_PASSWORD):
     response = client.post(
         "/login",
         data={
-            "email": email,
+            "username": username,
             "password": password,
             "csrf": csrf_from(client.get("/login")),
         },
@@ -49,7 +49,7 @@ def test_complete_assignment_report_review_and_tenant_flow(monkeypatch, tmp_path
         ).fetchone()["id"]
 
     with TestClient(module.app, base_url="http://testserver") as club:
-        login(club, "klubb@andrablicken.demo")
+        login(club, "klubb")
         create_page = club.get("/assignments/new")
         response = club.post(
             "/assignments/new",
@@ -70,7 +70,7 @@ def test_complete_assignment_report_review_and_tenant_flow(monkeypatch, tmp_path
         assignment_id = int(response.headers["location"].rsplit("/", 1)[1])
 
         with TestClient(module.app, base_url="http://testserver") as scout:
-            login(scout, "scout@andrablicken.demo")
+            login(scout, "scout")
             assignment_page = scout.get(f"/assignments/{assignment_id}")
             assert assignment_page.status_code == 200
             assert "https://example.com/licensed-match" in assignment_page.text
@@ -113,7 +113,7 @@ def test_complete_assignment_report_review_and_tenant_flow(monkeypatch, tmp_path
         assert club.get(f"/reports/{report_id}").status_code == 403
 
         with TestClient(module.app, base_url="http://testserver") as admin:
-            login(admin, "admin@andrablicken.demo")
+            login(admin, "admin")
             report_page = admin.get(f"/reports/{report_id}")
             assert report_page.status_code == 200
             response = admin.post(
@@ -144,9 +144,10 @@ def test_complete_assignment_report_review_and_tenant_flow(monkeypatch, tmp_path
             "SELECT id FROM clubs WHERE name='Rival IF'"
         ).fetchone()["id"]
         connection.execute(
-            "INSERT INTO users(name,email,password_hash,role,club_id) VALUES (?,?,?,?,?)",
+            "INSERT INTO users(name,username,email,password_hash,role,club_id) VALUES (?,?,?,?,?,?)",
             (
                 "Rivalens sportchef",
+                "rival",
                 "rival@example.test",
                 module.password_hash("rival-password"),
                 "club",
@@ -155,7 +156,7 @@ def test_complete_assignment_report_review_and_tenant_flow(monkeypatch, tmp_path
         )
 
     with TestClient(module.app, base_url="http://testserver") as rival:
-        login(rival, "rival@example.test", "rival-password")
+        login(rival, "rival", "rival-password")
         assert rival.get(f"/assignments/{assignment_id}").status_code == 403
         assert rival.get(f"/reports/{report_id}").status_code == 403
         assert rival.get(f"/reports/{report_id}/attachment").status_code == 403
