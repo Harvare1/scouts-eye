@@ -5,10 +5,10 @@ import sys
 from fastapi.testclient import TestClient
 
 
-ADMIN_PASSWORD = "admin-test-password-2026"
-SCOUT_PASSWORD = "scout-test-password-2026"
-RESET_PASSWORD = "reset-test-password-2026"
-FINAL_PASSWORD = "final-test-password-2026"
+ADMIN_PASSWORD = "adm123"
+SCOUT_PASSWORD = "sct123"
+RESET_PASSWORD = "rst456"
+FINAL_PASSWORD = "fin789"
 
 
 def load_application(monkeypatch, tmp_path):
@@ -60,6 +60,7 @@ def test_admin_can_manage_accounts_and_sessions(monkeypatch, tmp_path):
         users_page = admin.get("/admin/users")
         assert users_page.status_code == 200
         assert "KLUBBAR & KONTON" in users_page.text
+        assert 'minlength="6"' in users_page.text
 
         response = admin_post(admin, "/admin/clubs", {"name": "Pilot IF"})
         assert response.status_code == 303
@@ -68,6 +69,22 @@ def test_admin_can_manage_accounts_and_sessions(monkeypatch, tmp_path):
         with module.db() as connection:
             pilot_id = connection.execute("SELECT id FROM clubs WHERE name='Pilot IF'").fetchone()["id"]
             other_id = connection.execute("SELECT id FROM clubs WHERE name='Andra IF'").fetchone()["id"]
+
+        response = admin_post(
+            admin,
+            "/admin/users",
+            {
+                "name": "För kort lösenord",
+                "email": "short@example.test",
+                "role": "scout",
+                "club_id": "",
+                "password": "12345",
+                "confirm_password": "12345",
+            },
+        )
+        assert response.status_code == 303
+        with module.db() as connection:
+            assert connection.execute("SELECT 1 FROM users WHERE email='short@example.test'").fetchone() is None
 
         response = admin_post(
             admin,

@@ -33,8 +33,9 @@ if len(SECRET)<32:raise RuntimeError('Sessionshemligheten måste vara minst 32 t
 ALLOW_REGISTRATION=os.environ.get('ANDRABLICKEN_ALLOW_REGISTRATION','0' if PRODUCTION else '1')=='1'
 SEED_DEMO=os.environ.get('ANDRABLICKEN_SEED_DEMO','0')=='1'
 DEMO_PASSWORD=os.environ.get('ANDRABLICKEN_DEMO_PASSWORD','')
-if SEED_DEMO and (PRODUCTION or len(DEMO_PASSWORD)<10):
-    raise RuntimeError('Demodata får endast aktiveras lokalt med ANDRABLICKEN_DEMO_PASSWORD på minst 10 tecken.')
+MIN_PASSWORD_LENGTH=6
+if SEED_DEMO and (PRODUCTION or len(DEMO_PASSWORD)<MIN_PASSWORD_LENGTH):
+    raise RuntimeError(f'Demodata får endast aktiveras lokalt med ANDRABLICKEN_DEMO_PASSWORD på minst {MIN_PASSWORD_LENGTH} tecken.')
 
 app=FastAPI(title='Andrablicken Scouting Network')
 if PRODUCTION:
@@ -122,8 +123,8 @@ def init_db():
             email=os.environ.get('ANDRABLICKEN_BOOTSTRAP_ADMIN_EMAIL','').strip().lower()
             password=os.environ.get('ANDRABLICKEN_BOOTSTRAP_ADMIN_PASSWORD','')
             name=os.environ.get('ANDRABLICKEN_BOOTSTRAP_ADMIN_NAME','Administratör').strip()[:120]
-            if not re.fullmatch(r'[^@\s]+@[^@\s]+\.[^@\s]+',email) or len(password)<14:
-                raise RuntimeError('En giltig bootstrap-admin och lösenord på minst 14 tecken krävs för en tom produktionsdatabas.')
+            if not re.fullmatch(r'[^@\s]+@[^@\s]+\.[^@\s]+',email) or len(password)<MIN_PASSWORD_LENGTH:
+                raise RuntimeError(f'En giltig bootstrap-admin och lösenord på minst {MIN_PASSWORD_LENGTH} tecken krävs för en tom produktionsdatabas.')
             con.execute('INSERT INTO users(name,email,password_hash,role,club_id) VALUES (?,?,?,?,NULL)',
                         (name,email,password_hash(password),'admin'))
 init_db()
@@ -152,7 +153,7 @@ def check_token(request, value):
         raise HTTPException(403,'Ogiltig formulärtoken. Ladda om sidan.')
 
 def page(request,name,**context):
-    return tmpl.TemplateResponse(request,name,{'user':get_user(request),'csrf':token(request),'flash':request.session.pop('flash',None),'allow_registration':ALLOW_REGISTRATION,'seed_demo':SEED_DEMO,**context})
+    return tmpl.TemplateResponse(request,name,{'user':get_user(request),'csrf':token(request),'flash':request.session.pop('flash',None),'allow_registration':ALLOW_REGISTRATION,'seed_demo':SEED_DEMO,'min_password_length':MIN_PASSWORD_LENGTH,**context})
 
 def go(url):return RedirectResponse(url,status_code=303)
 
@@ -211,8 +212,8 @@ async def register(request:Request,name:str=Form(...),email:str=Form(...),passwo
     if not ALLOW_REGISTRATION:raise HTTPException(404)
     check_token(request,csrf)
     name=name.strip()[:120];email=email.strip().lower()[:254]
-    if role not in ['club','scout'] or not name or not re.fullmatch(r'[^@\s]+@[^@\s]+\.[^@\s]+',email) or len(password)<10:
-        return page(request,'register.html',error='Ange korrekt namn, e-postadress och lösenord (minst 10 tecken).')
+    if role not in ['club','scout'] or not name or not re.fullmatch(r'[^@\s]+@[^@\s]+\.[^@\s]+',email) or len(password)<MIN_PASSWORD_LENGTH:
+        return page(request,'register.html',error=f'Ange korrekt namn, e-postadress och lösenord (minst {MIN_PASSWORD_LENGTH} tecken).')
     if role=='club' and not club_name.strip():return page(request,'register.html',error='Ange klubbnamn.')
     try:
         with db() as con:
@@ -242,8 +243,8 @@ async def change_password(request:Request,current_password:str=Form(...),new_pas
     user=require_user(request);check_token(request,csrf)
     if new_password!=confirm_password:
         return page(request,'account.html',error='De nya lösenorden matchar inte.')
-    if len(new_password)<14:
-        return page(request,'account.html',error='Det nya lösenordet måste vara minst 14 tecken.')
+    if len(new_password)<MIN_PASSWORD_LENGTH:
+        return page(request,'account.html',error=f'Det nya lösenordet måste vara minst {MIN_PASSWORD_LENGTH} tecken.')
     if not verify_password(current_password,user['password_hash']):
         return page(request,'account.html',error='Nuvarande lösenord är fel.')
     with db() as con:
@@ -292,8 +293,8 @@ async def admin_create_user(request:Request,name:str=Form(...),email:str=Form(..
     try:name,email,role,selected_club=admin_form_values(name,email,role,club_id)
     except ValueError as exc:
         notice(request,str(exc));return go('/admin/users')
-    if password!=confirm_password or len(password)<14:
-        notice(request,'Lösenorden måste matcha och vara minst 14 tecken.')
+    if password!=confirm_password or len(password)<MIN_PASSWORD_LENGTH:
+        notice(request,f'Lösenorden måste matcha och vara minst {MIN_PASSWORD_LENGTH} tecken.')
         return go('/admin/users')
     try:
         with db() as con:
@@ -352,8 +353,8 @@ async def admin_user_status(request:Request,user_id:int,action:str=Form(...),csr
 @app.post('/admin/users/{user_id}/password')
 async def admin_reset_password(request:Request,user_id:int,password:str=Form(...),confirm_password:str=Form(...),csrf:str=Form(...)):
     admin=require_user(request,('admin',));check_token(request,csrf)
-    if password!=confirm_password or len(password)<14:
-        notice(request,'Lösenorden måste matcha och vara minst 14 tecken.');return go('/admin/users')
+    if password!=confirm_password or len(password)<MIN_PASSWORD_LENGTH:
+        notice(request,f'Lösenorden måste matcha och vara minst {MIN_PASSWORD_LENGTH} tecken.');return go('/admin/users')
     with db() as con:
         target=con.execute('SELECT name FROM users WHERE id=?',(user_id,)).fetchone()
         if not target:raise HTTPException(404)
