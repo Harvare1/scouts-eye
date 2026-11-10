@@ -100,6 +100,11 @@ def init_db():
         CREATE TABLE IF NOT EXISTS lessons(user_id INTEGER NOT NULL REFERENCES users(id),lesson_index INTEGER NOT NULL,done_at TEXT NOT NULL,PRIMARY KEY(user_id,lesson_index));
         CREATE TABLE IF NOT EXISTS quiz_results(user_id INTEGER PRIMARY KEY REFERENCES users(id),best_score INTEGER NOT NULL,passed INTEGER NOT NULL,finished_at TEXT NOT NULL);
         ''')
+        user_columns={row['name'] for row in con.execute('PRAGMA table_info(users)').fetchall()}
+        if 'active' not in user_columns:
+            con.execute('ALTER TABLE users ADD COLUMN active INTEGER NOT NULL DEFAULT 1')
+        if 'session_version' not in user_columns:
+            con.execute('ALTER TABLE users ADD COLUMN session_version INTEGER NOT NULL DEFAULT 1')
         con.execute('PRAGMA journal_mode=WAL')
         count=con.execute('SELECT COUNT(*) AS c FROM users').fetchone()['c']
         if not count and SEED_DEMO:
@@ -126,7 +131,11 @@ init_db()
 def get_user(request):
     uid=request.session.get('uid')
     if not uid:return None
-    with db() as con:return con.execute('SELECT * FROM users WHERE id=?',(uid,)).fetchone()
+    with db() as con:user=con.execute('SELECT * FROM users WHERE id=?',(uid,)).fetchone()
+    if not user or not user['active'] or request.session.get('sv')!=user['session_version']:
+        request.session.clear()
+        return None
+    return user
 
 def require_user(request,roles=None):
     user=get_user(request)
@@ -187,7 +196,9 @@ async def login(request:Request,email:str=Form(...),password:str=Form(...),csrf:
     with db() as con:u=con.execute('SELECT * FROM users WHERE email=?',(email.lower().strip(),)).fetchone()
     if not u or not verify_password(password,u['password_hash']):
         return page(request,'login.html',error='Fel e-postadress eller lösenord.')
-    request.session.clear();request.session['uid']=u['id'];request.session['csrf']=secrets.token_urlsafe(32)
+    if not u['active']:
+        return page(request,'login.html',error='Kontot är avstängt. Kontakta administratören.')
+    request.session.clear();request.session['uid']=u['id'];request.session['sv']=u['session_version'];request.session['csrf']=secrets.token_urlsafe(32)
     return go('/app')
 
 @app.get('/register',response_class=HTMLResponse)
@@ -214,12 +225,143 @@ async def register(request:Request,name:str=Form(...),email:str=Form(...),passwo
             con.execute('INSERT INTO users(name,email,password_hash,role,club_id) VALUES (?,?,?,?,?)',(name,email,password_hash(password),role,club_id))
             uid=con.execute('SELECT last_insert_rowid() AS id').fetchone()['id']
     except sqlite3.IntegrityError:return page(request,'register.html',error='E-postadressen är redan registrerad.')
-    request.session.clear();request.session['uid']=uid;request.session['csrf']=secrets.token_urlsafe(32)
+    request.session.clear();request.session['uid']=uid;request.session['sv']=1;request.session['csrf']=secrets.token_urlsafe(32)
     return go('/app')
 
 @app.post('/logout')
 async def logout(request:Request,csrf:str=Form(...)):
     check_token(request,csrf);request.session.clear();return go('/')
+
+@app.get('/account',response_class=HTMLResponse)
+def account_page(request:Request):
+    require_user(request)
+    return page(request,'account.html')
+
+@app.post('/account/password')
+async def change_password(request:Request,current_password:str=Form(...),new_password:str=Form(...),confirm_password:str=Form(...),csrf:str=Form(...)):
+    user=require_user(request);check_token(request,csrf)
+    if new_password!=confirm_password:
+        return page(request,'account.html',error='De nya lösenorden matchar inte.')
+    if len(new_password)<14:
+        return page(request,'account.html',error='Det nya lösenordet måste vara minst 14 tecken.')
+    if not verify_password(current_password,user['password_hash']):
+        return page(request,'account.html',error='Nuvarande lösenord är fel.')
+    with db() as con:
+        con.execute('UPDATE users SET password_hash=?,session_version=session_version+1 WHERE id=?',(password_hash(new_password),user['id']))
+        session_version=con.execute('SELECT session_version FROM users WHERE id=?',(user['id'],)).fetchone()['session_version']
+    request.session['sv']=session_version
+    notice(request,'Lösenordet har ändrats. Andra inloggade sessioner har avslutats.')
+    return go('/account')
+
+def admin_form_values(name,email,role,club_id):
+    name=name.strip()[:120]
+    email=email.strip().lower()[:254]
+    if not name or not re.fullmatch(r'[^@\s]+@[^@\s]+\.[^@\s]+',email):
+        raise ValueError('Ange ett namn och en giltig e-postadress.')
+    if role not in ('admin','scout','club'):
+        raise ValueError('Ogiltig roll.')
+    selected_club=int(club_id) if role=='club' and str(club_id).isdigit() else None
+    if role=='club' and selected_club is None:
+        raise ValueError('Ett klubbkonto måste kopplas till en klubb.')
+    return name,email,role,selected_club
+
+@app.get('/admin/users',response_class=HTMLResponse)
+def admin_users_page(request:Request):
+    require_user(request,('admin',))
+    with db() as con:
+        clubs=con.execute('SELECT c.*,COUNT(u.id) AS user_count FROM clubs c LEFT JOIN users u ON u.club_id=c.id GROUP BY c.id ORDER BY c.name').fetchall()
+        users=con.execute('SELECT u.*,c.name AS club_name FROM users u LEFT JOIN clubs c ON c.id=u.club_id ORDER BY u.active DESC,u.name').fetchall()
+    return page(request,'admin_users.html',clubs=clubs,users=users)
+
+@app.post('/admin/clubs')
+async def admin_create_club(request:Request,name:str=Form(...),csrf:str=Form(...)):
+    require_user(request,('admin',));check_token(request,csrf)
+    name=name.strip()[:120]
+    if not name:raise HTTPException(400,'Klubbnamn krävs.')
+    try:
+        with db() as con:con.execute('INSERT INTO clubs(name) VALUES (?)',(name,))
+    except sqlite3.IntegrityError:
+        notice(request,'Klubbnamnet finns redan.')
+        return go('/admin/users')
+    notice(request,f'Klubben {name} har skapats.')
+    return go('/admin/users')
+
+@app.post('/admin/users')
+async def admin_create_user(request:Request,name:str=Form(...),email:str=Form(...),role:str=Form(...),club_id:str=Form(''),password:str=Form(...),confirm_password:str=Form(...),csrf:str=Form(...)):
+    require_user(request,('admin',));check_token(request,csrf)
+    try:name,email,role,selected_club=admin_form_values(name,email,role,club_id)
+    except ValueError as exc:
+        notice(request,str(exc));return go('/admin/users')
+    if password!=confirm_password or len(password)<14:
+        notice(request,'Lösenorden måste matcha och vara minst 14 tecken.')
+        return go('/admin/users')
+    try:
+        with db() as con:
+            if selected_club and not con.execute('SELECT 1 FROM clubs WHERE id=?',(selected_club,)).fetchone():raise ValueError('Klubben finns inte.')
+            con.execute('INSERT INTO users(name,email,password_hash,role,club_id,active,session_version) VALUES (?,?,?,?,?,1,1)',(name,email,password_hash(password),role,selected_club))
+    except sqlite3.IntegrityError:
+        notice(request,'E-postadressen används redan.')
+        return go('/admin/users')
+    except ValueError as exc:
+        notice(request,str(exc));return go('/admin/users')
+    notice(request,f'Kontot för {name} har skapats.')
+    return go('/admin/users')
+
+@app.post('/admin/users/{user_id}/update')
+async def admin_update_user(request:Request,user_id:int,name:str=Form(...),email:str=Form(...),role:str=Form(...),club_id:str=Form(''),csrf:str=Form(...)):
+    admin=require_user(request,('admin',));check_token(request,csrf)
+    try:name,email,role,selected_club=admin_form_values(name,email,role,club_id)
+    except ValueError as exc:
+        notice(request,str(exc));return go('/admin/users')
+    with db() as con:
+        target=con.execute('SELECT * FROM users WHERE id=?',(user_id,)).fetchone()
+        if not target:raise HTTPException(404)
+        if selected_club and not con.execute('SELECT 1 FROM clubs WHERE id=?',(selected_club,)).fetchone():
+            notice(request,'Klubben finns inte.');return go('/admin/users')
+        active_admins=con.execute("SELECT COUNT(*) AS c FROM users WHERE role='admin' AND active=1").fetchone()['c']
+        if target['role']=='admin' and target['active'] and role!='admin' and active_admins<=1:
+            notice(request,'Den sista aktiva administratören kan inte byta roll.');return go('/admin/users')
+        if user_id==admin['id'] and role!='admin':
+            notice(request,'Du kan inte ta bort din egen administratörsroll.');return go('/admin/users')
+        try:
+            con.execute('UPDATE users SET name=?,email=?,role=?,club_id=?,session_version=session_version+1 WHERE id=?',(name,email,role,selected_club,user_id))
+        except sqlite3.IntegrityError:
+            notice(request,'E-postadressen används redan.');return go('/admin/users')
+        new_version=con.execute('SELECT session_version FROM users WHERE id=?',(user_id,)).fetchone()['session_version']
+    if user_id==admin['id']:request.session['sv']=new_version
+    notice(request,f'Kontot för {name} har uppdaterats.')
+    return go('/admin/users')
+
+@app.post('/admin/users/{user_id}/status')
+async def admin_user_status(request:Request,user_id:int,action:str=Form(...),csrf:str=Form(...)):
+    admin=require_user(request,('admin',));check_token(request,csrf)
+    active=1 if action=='activate' else 0 if action=='deactivate' else None
+    if active is None:raise HTTPException(400)
+    if user_id==admin['id'] and not active:
+        notice(request,'Du kan inte stänga av ditt eget konto.');return go('/admin/users')
+    with db() as con:
+        target=con.execute('SELECT * FROM users WHERE id=?',(user_id,)).fetchone()
+        if not target:raise HTTPException(404)
+        active_admins=con.execute("SELECT COUNT(*) AS c FROM users WHERE role='admin' AND active=1").fetchone()['c']
+        if not active and target['role']=='admin' and target['active'] and active_admins<=1:
+            notice(request,'Den sista aktiva administratören kan inte stängas av.');return go('/admin/users')
+        con.execute('UPDATE users SET active=?,session_version=session_version+1 WHERE id=?',(active,user_id))
+    notice(request,'Kontot har aktiverats.' if active else 'Kontot har stängts av och dess sessioner har avslutats.')
+    return go('/admin/users')
+
+@app.post('/admin/users/{user_id}/password')
+async def admin_reset_password(request:Request,user_id:int,password:str=Form(...),confirm_password:str=Form(...),csrf:str=Form(...)):
+    admin=require_user(request,('admin',));check_token(request,csrf)
+    if password!=confirm_password or len(password)<14:
+        notice(request,'Lösenorden måste matcha och vara minst 14 tecken.');return go('/admin/users')
+    with db() as con:
+        target=con.execute('SELECT name FROM users WHERE id=?',(user_id,)).fetchone()
+        if not target:raise HTTPException(404)
+        con.execute('UPDATE users SET password_hash=?,session_version=session_version+1 WHERE id=?',(password_hash(password),user_id))
+        new_version=con.execute('SELECT session_version FROM users WHERE id=?',(user_id,)).fetchone()['session_version']
+    if user_id==admin['id']:request.session['sv']=new_version
+    notice(request,f'Lösenordet för {target["name"]} har återställts och gamla sessioner har avslutats.')
+    return go('/admin/users')
 
 @app.get('/app',response_class=HTMLResponse)
 def dashboard(request:Request):

@@ -38,6 +38,12 @@ På en tom databas krävs dessutom en engångsbootstrap via `ANDRABLICKEN_BOOTST
 
 SQLite-databasen och uppladdningar lagras beständigt i `/opt/andrablicken/data` på appservern. Den nuvarande piloten kör därför en appinstans. Horisontell replikering kräver först migrering till PostgreSQL och delad objektlagring.
 
+## Kontohantering
+
+Administratörer hanterar klubbar och användare på `/admin/users`. Där går det att skapa konton, ändra roll och klubbtillhörighet, stänga av eller aktivera konton och återställa lösenord. Alla användare kan byta sitt eget lösenord på `/account`.
+
+Vid start migreras äldre SQLite-databaser automatiskt med status och sessionsversion för användarkonton. Avstängning, lösenordsåterställning och kontoändringar avslutar äldre sessioner. Tillfälliga lösenord ska lämnas till användaren genom en separat säker kanal; e-postinbjudan och automatisk lösenordsåterställning ingår ännu inte i piloten.
+
 ## Säkerhetsgränser
 
 - Öppen registrering är avstängd i hostad pilot.
