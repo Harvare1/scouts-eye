@@ -1,0 +1,49 @@
+{% extends 'base.html' %}{% block title %}Scoutprofil · {{scout['name']}}{% endblock %}{% block content %}
+<div class="eyebrow">Andrablicken / Scoutprofil</div>
+<div class="profile-hero">
+  <div>
+    <h1 class="title">{{scout['name']|upper}}.</h1>
+    <p class="subtitle">{{profile['headline'] if profile and profile['headline'] else 'Fotbollsscout i Andrablicken'}}{% if profile and profile['location'] %} · {{profile['location']}}{% endif %}</p>
+  </div>
+  <div class="buttons profile-actions">
+    <a class="btn" href="/scouts/{{scout['id']}}/pdf">Exportera profil som PDF ↓</a>
+    {% if profile and profile['cv_file'] %}<a class="btn outline" href="/scouts/{{scout['id']}}/cv">Ladda ner uppladdat CV ↓</a>{% endif %}
+  </div>
+</div>
+
+<div class="profile-status card">
+  <div><span class="eyebrow">Tillgänglighet</span><strong class="availability {{profile['availability'] if profile else 'open'}}">{{'Tillgänglig för uppdrag' if not profile or profile['availability']=='open' else ('Begränsad tillgänglighet' if profile['availability']=='limited' else 'Inte tillgänglig just nu')}}</strong>{% if profile and profile['availability_note'] %}<p class="muted small">{{profile['availability_note']}}</p>{% endif %}</div>
+  <div><span class="eyebrow">Verifierad historik</span><strong>{{verified_assignments|length}} uppdrag · {{verified_reports|length}} {{'rapport' if verified_reports|length==1 else 'rapporter'}}</strong><p class="muted small">Endast administrativt godkända Andrablicken-resultat.</p></div>
+  <div><span class="eyebrow">Erfarenhet</span><strong>{{profile['years_experience'] if profile else 0}} år</strong><p class="muted small">Självuppgiven uppgift.</p></div>
+</div>
+
+<div class="grid cols2 profile-grid">
+  <section class="card"><div class="section-label self-reported">Självuppgivet</div><h2 class="h2">Fotbolls-CV</h2><h3 class="h3">Profil</h3><p class="preline">{{profile['bio'] if profile and profile['bio'] else 'Ingen profiltext angiven.'}}</p><h3 class="h3 spaced">Erfarenhet</h3><p class="preline">{{profile['experience'] if profile and profile['experience'] else 'Ingen erfarenhet angiven.'}}</p></section>
+  <section class="card"><div class="section-label self-reported">Självuppgivet</div><h2 class="h2">Meriter</h2><p class="preline">{{profile['merits'] if profile and profile['merits'] else 'Inga egna meriter angivna.'}}</p><h3 class="h3 spaced">Kompetenser</h3><div class="chip-list">{% for item in competencies %}<span class="chip">{{item}}</span>{% else %}<span class="muted">Inga kompetenser angivna.</span>{% endfor %}</div><h3 class="h3 spaced">Språk</h3><div class="chip-list">{% for item in languages %}<span class="chip">{{item}}</span>{% else %}<span class="muted">Inga språk angivna.</span>{% endfor %}</div></section>
+</div>
+
+<section class="verified-block">
+  <div class="panel-head"><div><div class="section-label verified">Verifierat av Andrablicken</div><h2 class="h2">Godkända uppdrag</h2></div></div>
+  <div class="list">{% for item in verified_assignments %}<div class="list-item"><div><strong>{{item['title']}}</strong><div class="meta">{{item['fixture']}} · {{item['club_name']}}{% if item['match_date'] %} · {{item['match_date']}}{% endif %}</div></div><span class="tag approved">Verifierat · {{item['report_count']}} rapport{{'' if item['report_count']==1 else 'er'}}</span></div>{% else %}<div class="card">Inga verifierade uppdrag ännu. De läggs till automatiskt när en rapport godkänns.</div>{% endfor %}</div>
+  <h2 class="h2">Godkända rapporter</h2>
+  <div class="list">{% for item in verified_reports %}<div class="list-item"><div><strong>{{'Spelarrapport' if item['kind']=='player' else 'Motståndarrapport'}} · {{item['title']}}</strong><div class="meta">{{item['fixture']}} · {{item['club_name']}} · Godkänd {{item['updated_at'][:10]}}</div></div>{% if user['role']=='admin' or (user['role']=='scout' and user['id']==scout['id']) or user['role']=='club' %}<a class="btn outline small" href="/reports/{{item['id']}}">Öppna →</a>{% endif %}</div>{% else %}<div class="card">Inga verifierade rapporter ännu.</div>{% endfor %}</div>
+</section>
+
+{% if can_edit %}
+<section class="card profile-editor">
+  <div class="section-label self-reported">Redigera självuppgifter</div><h2 class="h2">Uppdatera scoutprofil</h2><p class="muted">Dina egna uppgifter märks alltid som självuppgivna. Godkända uppdrag och rapporter hämtas automatiskt och kan inte redigeras här.</p>
+  <form method="post" action="/scouts/{{scout['id']}}"><input type="hidden" name="csrf" value="{{csrf}}">
+    <div class="form-row"><label class="field"><span>Professionell rubrik</span><input name="headline" maxlength="160" value="{{profile['headline'] if profile else ''}}" placeholder="Exempel: Matchanalytiker med fokus på spelarrekrytering"></label><label class="field"><span>Ort / arbetsområde</span><input name="location" maxlength="160" value="{{profile['location'] if profile else ''}}" placeholder="Stockholm / Norden / Distans"></label></div>
+    <label class="field"><span>Profil och fotbollsbakgrund</span><textarea name="bio" maxlength="5000" placeholder="Sammanfatta din fotbollsbakgrund och inriktning.">{{profile['bio'] if profile else ''}}</textarea></label>
+    <div class="form-row"><label class="field"><span>Antal års erfarenhet</span><input type="number" min="0" max="80" name="years_experience" value="{{profile['years_experience'] if profile else 0}}"></label><label class="field"><span>Tillgänglighet</span><select name="availability"><option value="open" {% if not profile or profile['availability']=='open' %}selected{% endif %}>Tillgänglig för uppdrag</option><option value="limited" {% if profile and profile['availability']=='limited' %}selected{% endif %}>Begränsad tillgänglighet</option><option value="unavailable" {% if profile and profile['availability']=='unavailable' %}selected{% endif %}>Inte tillgänglig</option></select></label></div>
+    <label class="field"><span>Erfarenhet</span><textarea name="experience" maxlength="10000" placeholder="Klubbar, roller, perioder och ansvarsområden.">{{profile['experience'] if profile else ''}}</textarea></label>
+    <label class="field"><span>Meriter</span><textarea name="merits" maxlength="10000" placeholder="Utbildningar, certifikat, turneringar och andra egna meriter.">{{profile['merits'] if profile else ''}}</textarea></label>
+    <div class="form-row"><label class="field"><span>Kompetenser</span><textarea name="competencies" maxlength="3000" placeholder="Spelaridentifiering, motståndsanalys, videoanalys (en per rad)">{{profile['competencies'] if profile else ''}}</textarea></label><label class="field"><span>Språk och nivå</span><textarea name="languages" maxlength="3000" placeholder="Svenska – modersmål&#10;Engelska – professionell nivå">{{profile['languages'] if profile else ''}}</textarea></label></div>
+    <label class="field"><span>Tillgänglighetsnotering</span><input name="availability_note" maxlength="1000" value="{{profile['availability_note'] if profile else ''}}" placeholder="Exempel: Tillgänglig kvällar och helger, kan resa inom Norden"></label>
+    <button class="btn" type="submit">Spara scoutprofil →</button>
+  </form>
+  <hr class="line">
+  <form method="post" action="/scouts/{{scout['id']}}/cv" enctype="multipart/form-data"><input type="hidden" name="csrf" value="{{csrf}}"><label class="field"><span>Ladda upp CV som PDF</span><input type="file" name="file" accept="application/pdf,.pdf" required><small>Högst 8 MB. Ett nytt CV ersätter tidigare fil.</small></label><button class="btn outline" type="submit">Ladda upp CV</button></form>
+</section>
+{% endif %}
+{% endblock %}

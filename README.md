@@ -50,6 +50,16 @@ Inloggade användare når `/mallbibliotek` för att välja och ladda ner den 8-s
 
 PDF-bilagor lagras tillsammans med övrig beständig appdata under `/opt/andrablicken/data` på appservern. En separat filserver behövs inte för pilotens nuvarande eninstansdrift. Vid horisontell skalning ska filerna flyttas till delad objektlagring innan fler appinstanser startas.
 
+## Scoutprofiler och fotbolls-CV
+
+Scouter hanterar sin profil via **Scoutprofil** i huvudmenyn. Profilen innehåller fotbollsbakgrund, erfarenhet, egna meriter, kompetenser, språk, tillgänglighet och ett valfritt PDF-CV på högst 8 MB. Hela profilen kan exporteras som en separat Andrablicken-PDF.
+
+Egen text visas alltid som **Självuppgivet**. Uppdrag och rapporter visas separat som **Verifierat av Andrablicken** och hämtas automatiskt från administrativt godkända rapporter; scouten kan inte själv skapa eller redigera verifierade poster. En klubb kan endast se profilen för en scout som är tilldelad, har ansökt eller har en godkänd rapport för den klubben. I klubbvyn filtreras verifierad historik till den egna klubbens uppdrag för att bevara tenantisolering. Administratörer och profilens scout ser hela verifierade historiken.
+
+CV-filer lagras under `data/uploads/cv` i samma beständiga volym som rapportbilagor. En ny fil ersätter den gamla. Åtkomst sker alltid genom applikationens rollkontroll; uppladdningskatalogen exponeras inte statiskt.
+
+Databastabellen `scout_profiles` skapas idempotent vid start. Ingen separat manuell migrering krävs för befintliga SQLite-installationer.
+
 ## Säkerhetsgränser
 
 - Öppen registrering är avstängd i hostad pilot.

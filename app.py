@@ -14,7 +14,7 @@ from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
-from pdf_reports import render_pdf, PLAYER_FIELDS, OPP_FIELDS
+from pdf_reports import render_pdf, render_scout_profile_pdf, PLAYER_FIELDS, OPP_FIELDS
 
 ROOT=Path(__file__).resolve().parent
 ENV=os.environ.get('ANDRABLICKEN_ENV','development').strip().lower()
@@ -22,6 +22,7 @@ PRODUCTION=ENV=='production'
 STORE=Path(os.environ.get('ANDRABLICKEN_STORAGE',str(ROOT/'data')))
 STORE.mkdir(parents=True,exist_ok=True)
 UPLOADS=STORE/'uploads';UPLOADS.mkdir(exist_ok=True)
+CV_UPLOADS=UPLOADS/'cv';CV_UPLOADS.mkdir(exist_ok=True)
 DB=STORE/'portal.sqlite3'
 SECRET=os.environ.get('ANDRABLICKEN_SESSION_SECRET','').strip()
 if not SECRET:
@@ -104,6 +105,15 @@ def init_db():
         CREATE TABLE IF NOT EXISTS assignments(id INTEGER PRIMARY KEY, club_id INTEGER NOT NULL REFERENCES clubs(id),title TEXT NOT NULL,fixture TEXT NOT NULL,match_date TEXT,deadline TEXT,video_url TEXT,instructions TEXT,scout_id INTEGER REFERENCES users(id),created_at TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS applications(id INTEGER PRIMARY KEY,assignment_id INTEGER NOT NULL REFERENCES assignments(id),scout_id INTEGER NOT NULL REFERENCES users(id),created_at TEXT NOT NULL, UNIQUE(assignment_id,scout_id));
         CREATE TABLE IF NOT EXISTS reports(id INTEGER PRIMARY KEY,assignment_id INTEGER NOT NULL REFERENCES assignments(id),scout_id INTEGER NOT NULL REFERENCES users(id),kind TEXT NOT NULL CHECK(kind IN ('player','opposition')),payload TEXT NOT NULL DEFAULT '{}',status TEXT NOT NULL DEFAULT 'draft',review_note TEXT DEFAULT '',created_at TEXT NOT NULL,updated_at TEXT NOT NULL,uploaded_file TEXT);
+        CREATE TABLE IF NOT EXISTS scout_profiles(
+            user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+            headline TEXT NOT NULL DEFAULT '', bio TEXT NOT NULL DEFAULT '', location TEXT NOT NULL DEFAULT '',
+            years_experience INTEGER NOT NULL DEFAULT 0, experience TEXT NOT NULL DEFAULT '',
+            merits TEXT NOT NULL DEFAULT '', competencies TEXT NOT NULL DEFAULT '', languages TEXT NOT NULL DEFAULT '',
+            availability TEXT NOT NULL DEFAULT 'open' CHECK(availability IN ('open','limited','unavailable')),
+            availability_note TEXT NOT NULL DEFAULT '', cv_file TEXT, cv_original_name TEXT,
+            updated_at TEXT NOT NULL
+        );
         CREATE TABLE IF NOT EXISTS lessons(user_id INTEGER NOT NULL REFERENCES users(id),lesson_index INTEGER NOT NULL,done_at TEXT NOT NULL,PRIMARY KEY(user_id,lesson_index));
         CREATE TABLE IF NOT EXISTS quiz_results(user_id INTEGER PRIMARY KEY REFERENCES users(id),best_score INTEGER NOT NULL,passed INTEGER NOT NULL,finished_at TEXT NOT NULL);
         ''')
@@ -192,6 +202,35 @@ def can_access_assignment(user,a,full=False):
 def fetch_report(rid):
     with db() as con:return con.execute('SELECT r.*,a.club_id,a.title AS assignment_title,a.fixture,a.video_url FROM reports r JOIN assignments a ON a.id=r.assignment_id WHERE r.id=?',(rid,)).fetchone()
 
+def can_view_scout_profile(user,scout_id):
+    if user['role']=='admin' or (user['role']=='scout' and user['id']==scout_id):return True
+    if user['role']!='club':return False
+    with db() as con:
+        return con.execute('''SELECT 1 FROM assignments a
+            LEFT JOIN applications ap ON ap.assignment_id=a.id AND ap.scout_id=?
+            LEFT JOIN reports r ON r.assignment_id=a.id AND r.scout_id=? AND r.status='approved'
+            WHERE a.club_id=? AND (a.scout_id=? OR ap.id IS NOT NULL OR r.id IS NOT NULL) LIMIT 1''',
+            (scout_id,scout_id,user['club_id'],scout_id)).fetchone() is not None
+
+def scout_profile_data(scout_id,club_id=None):
+    with db() as con:
+        scout=con.execute("SELECT id,name,username,email FROM users WHERE id=? AND role='scout' AND active=1",(scout_id,)).fetchone()
+        if not scout:return None,None,[],[]
+        profile=con.execute('SELECT * FROM scout_profiles WHERE user_id=?',(scout_id,)).fetchone()
+        club_filter=' AND a.club_id=?' if club_id is not None else ''
+        params=(scout_id,club_id) if club_id is not None else (scout_id,)
+        verified_reports=con.execute('''SELECT r.id,r.kind,r.updated_at,a.id AS assignment_id,a.title,a.fixture,a.match_date,c.name AS club_name
+            FROM reports r JOIN assignments a ON a.id=r.assignment_id JOIN clubs c ON c.id=a.club_id
+            WHERE r.scout_id=? AND r.status='approved' '''+club_filter+' ORDER BY r.updated_at DESC,r.id DESC',params).fetchall()
+        verified_assignments=con.execute('''SELECT a.id,a.title,a.fixture,a.match_date,c.name AS club_name,MAX(r.updated_at) AS verified_at,COUNT(r.id) AS report_count
+            FROM assignments a JOIN clubs c ON c.id=a.club_id JOIN reports r ON r.assignment_id=a.id
+            WHERE r.scout_id=? AND r.status='approved' '''+club_filter+'''
+            GROUP BY a.id,a.title,a.fixture,a.match_date,c.name ORDER BY verified_at DESC,a.id DESC''',params).fetchall()
+    return scout,profile,verified_assignments,verified_reports
+
+def profile_lines(value):
+    return [part.strip() for part in re.split(r'[\n,;]+',value or '') if part.strip()][:40]
+
 def can_view_report(user,r):
     if user['role']=='admin':return True
     if user['role']=='scout':return r['scout_id']==user['id']
@@ -278,6 +317,87 @@ def template_library(request:Request):
 def account_page(request:Request):
     require_user(request)
     return page(request,'account.html')
+
+@app.get('/scouts/me')
+def my_scout_profile(request:Request):
+    user=require_user(request,('scout',))
+    return go(f'/scouts/{user["id"]}')
+
+@app.get('/scouts/{scout_id}',response_class=HTMLResponse)
+def scout_profile(request:Request,scout_id:int):
+    user=require_user(request)
+    scout,profile,verified_assignments,verified_reports=scout_profile_data(scout_id,user['club_id'] if user['role']=='club' else None)
+    if not scout:raise HTTPException(404)
+    if not can_view_scout_profile(user,scout_id):raise HTTPException(403)
+    return page(request,'scout_profile.html',scout=scout,profile=profile,
+        verified_assignments=verified_assignments,verified_reports=verified_reports,
+        competencies=profile_lines(profile['competencies'] if profile else ''),
+        languages=profile_lines(profile['languages'] if profile else ''),
+        can_edit=user['role']=='scout' and user['id']==scout_id)
+
+@app.post('/scouts/{scout_id}')
+async def update_scout_profile(request:Request,scout_id:int,headline:str=Form(''),bio:str=Form(''),location:str=Form(''),years_experience:int=Form(0),experience:str=Form(''),merits:str=Form(''),competencies:str=Form(''),languages:str=Form(''),availability:str=Form('open'),availability_note:str=Form(''),csrf:str=Form(...)):
+    user=require_user(request,('scout',));check_token(request,csrf)
+    if user['id']!=scout_id:raise HTTPException(403)
+    if availability not in ('open','limited','unavailable'):raise HTTPException(400,'Ogiltig tillgänglighet.')
+    years=max(0,min(80,years_experience))
+    now=datetime.now().isoformat(timespec='minutes')
+    with db() as con:
+        con.execute('''INSERT INTO scout_profiles(user_id,headline,bio,location,years_experience,experience,merits,competencies,languages,availability,availability_note,updated_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+            ON CONFLICT(user_id) DO UPDATE SET headline=excluded.headline,bio=excluded.bio,location=excluded.location,
+            years_experience=excluded.years_experience,experience=excluded.experience,merits=excluded.merits,
+            competencies=excluded.competencies,languages=excluded.languages,availability=excluded.availability,
+            availability_note=excluded.availability_note,updated_at=excluded.updated_at''',
+            (scout_id,headline.strip()[:160],bio.strip()[:5000],location.strip()[:160],years,
+             experience.strip()[:10000],merits.strip()[:10000],competencies.strip()[:3000],languages.strip()[:3000],
+             availability,availability_note.strip()[:1000],now))
+    notice(request,'Scoutprofilen har uppdaterats.')
+    return go(f'/scouts/{scout_id}')
+
+@app.post('/scouts/{scout_id}/cv')
+async def upload_scout_cv(request:Request,scout_id:int,file:UploadFile=File(...),csrf:str=Form(...)):
+    user=require_user(request,('scout',));check_token(request,csrf)
+    if user['id']!=scout_id:raise HTTPException(403)
+    if not file.filename or not file.filename.lower().endswith('.pdf'):raise HTTPException(400,'CV måste vara en PDF.')
+    content=await file.read(8*1024*1024+1)
+    if len(content)>8*1024*1024 or not content.startswith(b'%PDF-'):
+        raise HTTPException(400,'CV måste vara en PDF på högst 8 MB.')
+    fname=uuid.uuid4().hex+'.pdf';now=datetime.now().isoformat(timespec='minutes')
+    (CV_UPLOADS/fname).write_bytes(content)
+    with db() as con:
+        old=con.execute('SELECT cv_file FROM scout_profiles WHERE user_id=?',(scout_id,)).fetchone()
+        con.execute('''INSERT INTO scout_profiles(user_id,cv_file,cv_original_name,updated_at) VALUES (?,?,?,?)
+            ON CONFLICT(user_id) DO UPDATE SET cv_file=excluded.cv_file,cv_original_name=excluded.cv_original_name,updated_at=excluded.updated_at''',
+            (scout_id,fname,Path(file.filename).name[:180],now))
+    if old and old['cv_file']:
+        try:(CV_UPLOADS/Path(old['cv_file']).name).unlink(missing_ok=True)
+        except OSError:pass
+    notice(request,'Ditt CV har laddats upp.')
+    return go(f'/scouts/{scout_id}')
+
+@app.get('/scouts/{scout_id}/cv')
+def download_scout_cv(request:Request,scout_id:int):
+    user=require_user(request)
+    if not can_view_scout_profile(user,scout_id):raise HTTPException(403)
+    scout,profile,_,_=scout_profile_data(scout_id,user['club_id'] if user['role']=='club' else None)
+    if not scout or not profile or not profile['cv_file']:raise HTTPException(404)
+    path=CV_UPLOADS/Path(profile['cv_file']).name
+    if not path.exists():raise HTTPException(404)
+    return FileResponse(path,media_type='application/pdf',filename=f'cv-{scout["username"]}.pdf',headers={'Cache-Control':'private, no-store'})
+
+@app.get('/scouts/{scout_id}/pdf')
+def scout_profile_pdf(request:Request,scout_id:int):
+    user=require_user(request)
+    if not can_view_scout_profile(user,scout_id):raise HTTPException(403)
+    scout,profile,verified_assignments,verified_reports=scout_profile_data(scout_id,user['club_id'] if user['role']=='club' else None)
+    if not scout:raise HTTPException(404)
+    data=dict(profile) if profile else {}
+    data.update({'name':scout['name'],'username':scout['username'],'email':scout['email']})
+    body=render_scout_profile_pdf(data,[dict(row) for row in verified_assignments],[dict(row) for row in verified_reports])
+    return StreamingResponse(BytesIO(body),media_type='application/pdf',headers={
+        'Content-Disposition':f'attachment; filename="andrablicken-scoutprofil-{scout["username"]}.pdf"',
+        'Cache-Control':'private, no-store'})
 
 @app.post('/account/password')
 async def change_password(request:Request,current_password:str=Form(...),new_password:str=Form(...),confirm_password:str=Form(...),csrf:str=Form(...)):

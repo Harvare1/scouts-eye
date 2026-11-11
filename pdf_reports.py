@@ -11,6 +11,11 @@ from reportlab.lib.colors import HexColor
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.lib.utils import simpleSplit
+from reportlab.lib.enums import TA_CENTER
+from reportlab.lib.pagesizes import A4 as PORTRAIT_A4
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import mm
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak, KeepTogether
 
 FONT_REG = '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
 FONT_BOLD = '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'
@@ -315,6 +320,55 @@ def render_pdf(kind='player',data=None):
             if marker not in seen:seen.add(marker);unique.append((title,label,value))
         _append_fulltext(c,spec,unique,total)
     c.save();buf.seek(0)
+    return buf.getvalue()
+
+def render_scout_profile_pdf(data,verified_assignments=None,verified_reports=None):
+    """Export a scout CV while keeping self-reported and verified claims explicit."""
+    verified_assignments=verified_assignments or []
+    verified_reports=verified_reports or []
+    buf=BytesIO()
+    doc=SimpleDocTemplate(buf,pagesize=PORTRAIT_A4,rightMargin=18*mm,leftMargin=18*mm,topMargin=18*mm,bottomMargin=18*mm,
+        title=f'Andrablicken scoutprofil - {_safe(data.get("name"))}',author='Andrablicken Scouting Network')
+    styles=getSampleStyleSheet()
+    base=ParagraphStyle('ProfileBase',parent=styles['BodyText'],fontName=REG,fontSize=9.5,leading=14,textColor=INK,spaceAfter=8)
+    title=ParagraphStyle('ProfileTitle',parent=base,fontName=BOLD,fontSize=25,leading=29,textColor=DARK,spaceAfter=4)
+    subtitle=ParagraphStyle('ProfileSubtitle',parent=base,fontSize=11,textColor=GREY,spaceAfter=14)
+    heading=ParagraphStyle('ProfileHeading',parent=base,fontName=BOLD,fontSize=14,leading=18,textColor=DARK,spaceBefore=12,spaceAfter=7)
+    label_self=ParagraphStyle('SelfLabel',parent=base,fontName=BOLD,fontSize=7.5,leading=10,textColor=HexColor('#6A704A'),spaceAfter=4)
+    label_verified=ParagraphStyle('VerifiedLabel',parent=label_self,textColor=HexColor('#355B36'))
+    small=ParagraphStyle('ProfileSmall',parent=base,fontSize=8,leading=11,textColor=GREY)
+    def esc(value):
+        return (_safe(value).replace('&','&amp;').replace('<','&lt;').replace('>','&gt;').replace('\n','<br/>'))
+    def section(label,text):
+        return KeepTogether([Paragraph('SJÄLVUPPGIVET',label_self),Paragraph(label,heading),Paragraph(esc(text) or 'Inte angivet.',base)])
+    def footer(canvas_obj,document):
+        canvas_obj.saveState();canvas_obj.setFillColor(DARK);canvas_obj.rect(0,PORTRAIT_A4[1]-15*mm,PORTRAIT_A4[0],15*mm,fill=1,stroke=0)
+        canvas_obj.setFillColor(LIME);canvas_obj.setFont(BOLD,11);canvas_obj.drawString(18*mm,PORTRAIT_A4[1]-10*mm,'ANDRABLICKEN  /  SCOUTPROFIL')
+        canvas_obj.setFillColor(GREY);canvas_obj.setFont(REG,7);canvas_obj.drawString(18*mm,9*mm,'Självuppgivna uppgifter är inte verifierade av Andrablicken.')
+        canvas_obj.drawRightString(PORTRAIT_A4[0]-18*mm,9*mm,f'Sida {document.page}');canvas_obj.restoreState()
+    availability={'open':'Tillgänglig för uppdrag','limited':'Begränsad tillgänglighet','unavailable':'Inte tillgänglig just nu'}.get(data.get('availability'),'Tillgänglig för uppdrag')
+    story=[Spacer(1,4*mm),Paragraph(esc(data.get('name')) or 'Scoutprofil',title),
+        Paragraph(esc(data.get('headline')) or 'Fotbollsscout i Andrablicken',subtitle)]
+    facts=[[Paragraph('<b>Tillgänglighet</b><br/>'+esc(availability),base),Paragraph('<b>Erfarenhet</b><br/>'+esc(data.get('years_experience',0))+' år (självuppgivet)',base)],
+           [Paragraph('<b>Ort / område</b><br/>'+esc(data.get('location') or 'Inte angivet'),base),Paragraph('<b>Verifierad historik</b><br/>'+str(len(verified_assignments))+' uppdrag · '+str(len(verified_reports))+' rapporter',base)]]
+    table=Table(facts,colWidths=[82*mm,82*mm]);table.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,-1),PALE),('BOX',(0,0),(-1,-1),.6,LINE),('INNERGRID',(0,0),(-1,-1),.4,LINE),('VALIGN',(0,0),(-1,-1),'TOP'),('LEFTPADDING',(0,0),(-1,-1),9),('RIGHTPADDING',(0,0),(-1,-1),9),('TOPPADDING',(0,0),(-1,-1),7),('BOTTOMPADDING',(0,0),(-1,-1),7)]));story.extend([table,Spacer(1,5*mm)])
+    story.extend([section('Profil och fotbollsbakgrund',data.get('bio')),section('Erfarenhet',data.get('experience')),section('Meriter',data.get('merits')),section('Kompetenser',data.get('competencies')),section('Språk',data.get('languages')),section('Tillgänglighetsnotering',data.get('availability_note'))])
+    story.extend([PageBreak(),Paragraph('VERIFIERAT AV ANDRABLICKEN',label_verified),Paragraph('Godkända uppdrag',heading),Paragraph('Posterna skapas automatiskt när en Andrablicken-administratör godkänner en rapport.',small)])
+    if verified_assignments:
+        rows=[[Paragraph('<b>Uppdrag</b>',small),Paragraph('<b>Klubb / match</b>',small),Paragraph('<b>Rapporter</b>',small)]]
+        for item in verified_assignments:
+            rows.append([Paragraph(esc(item.get('title')),base),Paragraph(esc(item.get('club_name'))+'<br/>'+esc(item.get('fixture')),small),Paragraph(str(item.get('report_count',0)),base)])
+        t=Table(rows,colWidths=[61*mm,88*mm,18*mm],repeatRows=1);t.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),DEEP),('TEXTCOLOR',(0,0),(-1,0),WHITE),('GRID',(0,0),(-1,-1),.5,LINE),('VALIGN',(0,0),(-1,-1),'TOP'),('LEFTPADDING',(0,0),(-1,-1),7),('RIGHTPADDING',(0,0),(-1,-1),7),('TOPPADDING',(0,0),(-1,-1),6),('BOTTOMPADDING',(0,0),(-1,-1),6)]));story.append(t)
+    else:story.append(Paragraph('Inga verifierade uppdrag ännu.',base))
+    story.extend([Paragraph('Godkända rapporter',heading)])
+    if verified_reports:
+        rows=[[Paragraph('<b>Rapport</b>',small),Paragraph('<b>Uppdrag</b>',small),Paragraph('<b>Godkänd</b>',small)]]
+        for item in verified_reports:
+            kind='Spelarrapport' if item.get('kind')=='player' else 'Motståndarrapport'
+            rows.append([Paragraph(kind,base),Paragraph(esc(item.get('title'))+'<br/>'+esc(item.get('club_name')),small),Paragraph(esc(str(item.get('updated_at',''))[:10]),small)])
+        t=Table(rows,colWidths=[45*mm,92*mm,30*mm],repeatRows=1);t.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),DEEP),('TEXTCOLOR',(0,0),(-1,0),WHITE),('GRID',(0,0),(-1,-1),.5,LINE),('VALIGN',(0,0),(-1,-1),'TOP'),('LEFTPADDING',(0,0),(-1,-1),7),('RIGHTPADDING',(0,0),(-1,-1),7),('TOPPADDING',(0,0),(-1,-1),6),('BOTTOMPADDING',(0,0),(-1,-1),6)]));story.append(t)
+    else:story.append(Paragraph('Inga verifierade rapporter ännu.',base))
+    doc.build(story,onFirstPage=footer,onLaterPages=footer)
     return buf.getvalue()
 
 if __name__=='__main__':
