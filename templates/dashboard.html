@@ -14,6 +14,7 @@
   </div>
 </section>
 {% endif %}
+{% if user['role']=='admin' and academy_exam_count %}<div class="attention-panel"><span class="eyebrow">Academy · Åtgärd krävs</span><h2 class="h2">{{academy_exam_count}} examination{{'' if academy_exam_count==1 else 'er'}} väntar</h2><a class="btn" href="/admin/academy/examinations">Öppna granskningskö →</a></div>{% endif %}
 
 <div class="grid {{'cols2' if user['role']=='club' else 'cols3'}}" style="margin:28px 0">
   <div class="card"><span class="eyebrow">Uppdrag</span><div class="dashboard-number">{{assignments|length}}</div><p class="muted small">Synliga uppdrag</p></div>
