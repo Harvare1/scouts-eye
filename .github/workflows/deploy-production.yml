@@ -212,16 +212,14 @@ jobs:
           systemctl is-active --quiet caddy
           REMOTE
 
-      - name: Verify public Andrablicken
+      - name: Verify public Andrablicken on active DNS
         run: |
           curl --fail --show-error --silent \
             --retry 12 --retry-delay 5 --retry-all-errors \
-            https://andrablicken.knegare.eu/health \
+            https://scouts-eye.knegare.eu/health \
             | python3 -c 'import json,sys; assert json.load(sys.stdin)=={"status":"ok","mode":"production"}'
-          curl --fail --show-error --silent https://andrablicken.knegare.eu/ \
+          curl --fail --show-error --silent https://scouts-eye.knegare.eu/ \
             | grep --quiet 'ANDRABLICKEN'
-          test "$(curl --fail --show-error --silent --output /dev/null --write-out '%{redirect_url}' https://scouts-eye.knegare.eu/)" = \
-            'https://andrablicken.knegare.eu/'
 
   retire-old-app:
     name: Retire old Scout's Eye containers

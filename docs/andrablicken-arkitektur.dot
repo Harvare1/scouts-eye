@@ -21,7 +21,7 @@ digraph AndrablickenArchitecture {
     penwidth=1.5;
 
     users [label="ANVÄNDARE\nWebbläsare", fillcolor="#D7F179", color="#6F8731", penwidth=1.8];
-    dns [label="DNS HOS STRATO\nandrablicken.knegare.eu\nA → 103.177.249.207", fillcolor="#EAF2DC"];
+    dns [label="DNS HOS STRATO\nscouts-eye.knegare.eu aktiv\nandrablicken.knegare.eu väntar på DNS\nA → 103.177.249.207", fillcolor="#EAF2DC"];
     proxy [label="PROXY-LB\n103.177.249.207\nCaddy · HTTPS/TLS\nKomprimering + säkerhetsheaders", fillcolor="#203629", fontcolor="#FFFFFF", color="#D7F179", penwidth=2];
     host [label="APPSERVER1\n82.197.73.183\nDocker Compose\nVärdport 8091", fillcolor="#DDE9D8"];
     app [label="ANDRABLICKEN-CONTAINER\nFastAPI + Jinja2\nContainerport 8000\n/health", fillcolor="#D7F179", color="#6F8731", penwidth=1.8];
