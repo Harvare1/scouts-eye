@@ -4,7 +4,7 @@ digraph Infrastructure {
   edge [fontname="Arial", fontsize=10, color="#42634D", fontcolor="#294132", arrowsize=0.8, penwidth=1.6];
 
   user [label="1 · ANVÄNDARE\nöppnar webbplatsen", fillcolor="#D7F179", color="#6F8731", penwidth=2];
-  dns [label="2 · DNS / STRATO\nscouts-eye.knegare.eu\n→ 103.177.249.207", fillcolor="#EAF2DC"];
+  dns [label="2 · DNS / STRATO\nandrablicken.knegare.eu\n→ 103.177.249.207", fillcolor="#EAF2DC"];
   proxy [label="3 · PROXY-LB\n103.177.249.207\nCaddy sköter HTTPS\noch säkerhetsheaders", fillcolor="#203629", fontcolor="#FFFFFF", color="#D7F179", penwidth=2];
   host [label="4 · APPSERVER1\n82.197.73.183\nDocker Compose\nPort 8091", fillcolor="#DDE9D8"];
   app [label="5 · ANDRABLICKEN\nFastAPI-container\nPort 8000 + /health", fillcolor="#D7F179", color="#6F8731", penwidth=2];

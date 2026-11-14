@@ -1,4 +1,4 @@
-scouts-eye.knegare.eu {
+andrablicken.knegare.eu {
 	encode zstd gzip
 
 	header {
@@ -28,3 +28,6 @@ scouts-eye.knegare.eu {
 	}
 }
 
+scouts-eye.knegare.eu {
+	redir https://andrablicken.knegare.eu{uri} permanent
+}
