@@ -50,6 +50,14 @@ Inloggade användare når `/mallbibliotek` för att välja och ladda ner den 8-s
 
 PDF-bilagor lagras tillsammans med övrig beständig appdata under `/opt/andrablicken/data` på appservern. En separat filserver behövs inte för pilotens nuvarande eninstansdrift. Vid horisontell skalning ska filerna flyttas till delad objektlagring innan fler appinstanser startas.
 
+## Rapporteditor och scouttilldelning
+
+Rapporteditorn byggs från samma kapitel- och frågedefinitioner som PDF-exporten, så rubrikerna kan inte glida isär. Varje rapportkapitel har en egen digital taktiktavla. Spelare kan flyttas, Lag A och Lag B numreras separat och rörelsepilar kan ritas. Endast tavlor med innehåll tas med på motsvarande PDF-sida. Taktikdata valideras och begränsas per kapitel innan den sparas.
+
+Motståndarrapporten skiljer mellan utgångs-, uppspels- och etableringsformation, efterfrågar de tre senaste matchresultaten samt matchbild före och efter betydande byte. Editorn betonar exakt minut eller tidsstämpel och en avgränsad matchsituation per observation. Spelarrapporten frågar uttryckligen hur spelaren passar laget som scoutingen utförs för.
+
+Klubbkonton skapar uppdrag men kan inte välja eller tilldela scout. De kan lämna ett scoutönskemål som möjlig tilläggstjänst. Scouter anmäler intresse och administratören får en tydlig notifiering i adminpanelen för att granska profil och tilldela uppdraget. Scout Academy visas endast för scout och admin; klubbrollen blockeras även på serversidan.
+
 ## Scoutprofiler och fotbolls-CV
 
 Scouter hanterar sin profil via **Scoutprofil** i huvudmenyn. Profilen innehåller fotbollsbakgrund, erfarenhet, egna meriter, kompetenser, språk, tillgänglighet och ett valfritt PDF-CV på högst 8 MB. Hela profilen kan exporteras som en separat Andrablicken-PDF.

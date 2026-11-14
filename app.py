@@ -14,7 +14,7 @@ from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
-from pdf_reports import render_pdf, render_scout_profile_pdf, PLAYER_FIELDS, OPP_FIELDS
+from pdf_reports import render_pdf, render_scout_profile_pdf, PLAYER_FIELDS, OPP_FIELDS, REPORT_SPECS
 
 ROOT=Path(__file__).resolve().parent
 ENV=os.environ.get('ANDRABLICKEN_ENV','development').strip().lower()
@@ -57,8 +57,55 @@ async def security_headers(request,call_next):
     if PRODUCTION:response.headers['Strict-Transport-Security']='max-age=31536000; includeSubDomains'
     return response
 
-PLAYER_GROUPS=[('Identitet och match',PLAYER_FIELDS[:11]),('Matchbild och position',PLAYER_FIELDS[11:16]),('Bedömning',PLAYER_FIELDS[16:23]),('Slutsats och rekommendation',PLAYER_FIELDS[23:])]
-OPP_GROUPS=[('Identitet och match',OPP_FIELDS[:8]),('Matchbild och laguppställning',OPP_FIELDS[8:12]),('Spelmodell och press',OPP_FIELDS[12:18]),('Spelare och fasta situationer',OPP_FIELDS[18:24]),('Organisation, styrkor och analys',OPP_FIELDS[24:29]),('Matchplan och slutsatser',OPP_FIELDS[29:])]
+TIME_EVIDENCE_FIELDS={'game_context','observations','events','before_substitution','after_substitution','high_press','low_block','transitions_attack','transitions_defense','set_attacking','set_defending','corners','free_kicks'}
+
+def editor_chapters(kind):
+    """Build the editor from the exact same headings that drive the PDF."""
+    fields=dict(PLAYER_FIELDS if kind=='player' else OPP_FIELDS)
+    seen=set();chapters=[]
+    for index,(title,questions) in enumerate(REPORT_SPECS[kind]['pages'],start=1):
+        rendered=[]
+        for question in questions:
+            heading,*keys=question
+            editable=[];references=[]
+            for key in keys:
+                if key in seen:references.append(fields.get(key,key))
+                else:
+                    seen.add(key);editable.append((key,fields.get(key,key)))
+            rendered.append({'heading':heading,'fields':editable,'references':references})
+        chapters.append({'key':f'chapter_{index:02d}','title':title,'questions':rendered})
+    return chapters
+
+def _clamp(value):return max(0,min(1,float(value)))
+
+def normalize_tactics(raw):
+    """Validate the compact per-chapter tactical-board payload."""
+    try:data=json.loads(raw) if isinstance(raw,str) else raw
+    except (ValueError,TypeError):return {}
+    if isinstance(data,list):data={'chapter_01':{'markers':data,'arrows':[]}}
+    if not isinstance(data,dict):return {}
+    clean={}
+    for chapter,board in data.items():
+        if not re.fullmatch(r'chapter_(0[1-9]|1[0-5])',str(chapter)) or not isinstance(board,dict):continue
+        markers=[];team_numbers={'a':set(),'b':set()}
+        for marker in board.get('markers',[])[:30] if isinstance(board.get('markers',[]),list) else []:
+            try:
+                if not isinstance(marker,dict):continue
+                team='b' if marker.get('team')=='b' else 'a'
+                number=int(marker.get('number',0))
+                if number<1 or number>99 or number in team_numbers[team]:
+                    number=next((n for n in range(1,100) if n not in team_numbers[team]),1)
+                team_numbers[team].add(number)
+                markers.append({'x':_clamp(marker['x']),'y':_clamp(marker['y']),'team':team,'number':number})
+            except (KeyError,TypeError,ValueError):continue
+        arrows=[]
+        for arrow in board.get('arrows',[])[:40] if isinstance(board.get('arrows',[]),list) else []:
+            try:
+                if not isinstance(arrow,dict):continue
+                arrows.append({'x1':_clamp(arrow['x1']),'y1':_clamp(arrow['y1']),'x2':_clamp(arrow['x2']),'y2':_clamp(arrow['y2']),'team':'b' if arrow.get('team')=='b' else 'a'})
+            except (KeyError,TypeError,ValueError):continue
+        if markers or arrows:clean[str(chapter)]={'markers':markers,'arrows':arrows}
+    return clean
 QUESTIONS=[
  {'q':'Vad bör en scout prioritera vid en första observation?', 'a':['Bekräfta förutfattade uppfattningar','Dokumentera konkreta beteenden och matchsituationer','Endast titta på mål och assist'], 'correct':1},
  {'q':'Vad är en observation?', 'a':['Spelaren flyttade in centralt i minut 23','Spelaren är förmodligen lat','Spelaren passar inte i någon klubb'], 'correct':0},
@@ -124,6 +171,9 @@ def init_db():
             con.execute('ALTER TABLE users ADD COLUMN active INTEGER NOT NULL DEFAULT 1')
         if 'session_version' not in user_columns:
             con.execute('ALTER TABLE users ADD COLUMN session_version INTEGER NOT NULL DEFAULT 1')
+        assignment_columns={row['name'] for row in con.execute('PRAGMA table_info(assignments)').fetchall()}
+        if 'scout_request' not in assignment_columns:
+            con.execute("ALTER TABLE assignments ADD COLUMN scout_request TEXT NOT NULL DEFAULT ''")
         used_usernames={row['username'].lower() for row in con.execute("SELECT username FROM users WHERE username IS NOT NULL AND TRIM(username)<>''").fetchall()}
         for existing in con.execute("SELECT id,email FROM users WHERE username IS NULL OR TRIM(username)='' ORDER BY id").fetchall():
             base=re.sub(r'[^a-z0-9._-]+','-',existing['email'].split('@',1)[0].lower()).strip('._-')[:32]
@@ -529,17 +579,23 @@ async def admin_reset_password(request:Request,user_id:int,password:str=Form(...
 @app.get('/app',response_class=HTMLResponse)
 def dashboard(request:Request):
     u=require_user(request)
+    admin_applications=[]
     with db() as con:
         if u['role']=='admin':
             assignments=con.execute('SELECT a.*,c.name AS club_name,u.name AS scout_name FROM assignments a JOIN clubs c ON c.id=a.club_id LEFT JOIN users u ON u.id=a.scout_id ORDER BY a.id DESC').fetchall()
             reports=con.execute('SELECT r.*,a.title AS assignment_title,c.name AS club_name FROM reports r JOIN assignments a ON a.id=r.assignment_id JOIN clubs c ON c.id=a.club_id ORDER BY r.id DESC LIMIT 12').fetchall()
+            admin_applications=con.execute('''SELECT ap.id,ap.assignment_id,ap.scout_id,ap.created_at,
+                a.title,a.fixture,c.name AS club_name,u.name AS scout_name,u.email AS scout_email
+                FROM applications ap JOIN assignments a ON a.id=ap.assignment_id
+                JOIN clubs c ON c.id=a.club_id JOIN users u ON u.id=ap.scout_id
+                WHERE a.scout_id IS NULL ORDER BY ap.created_at DESC''').fetchall()
         elif u['role']=='club':
             assignments=con.execute('SELECT a.*,c.name AS club_name,u.name AS scout_name FROM assignments a JOIN clubs c ON c.id=a.club_id LEFT JOIN users u ON u.id=a.scout_id WHERE a.club_id=? ORDER BY a.id DESC',(u['club_id'],)).fetchall()
             reports=con.execute('SELECT r.*,a.title AS assignment_title,c.name AS club_name FROM reports r JOIN assignments a ON a.id=r.assignment_id JOIN clubs c ON c.id=a.club_id WHERE a.club_id=? AND r.status=? ORDER BY r.id DESC',(u['club_id'],'approved')).fetchall()
         else:
             assignments=con.execute('SELECT a.*,c.name AS club_name,u.name AS scout_name FROM assignments a JOIN clubs c ON c.id=a.club_id LEFT JOIN users u ON u.id=a.scout_id WHERE a.scout_id=? OR a.scout_id IS NULL ORDER BY a.id DESC',(u['id'],)).fetchall()
             reports=con.execute('SELECT r.*,a.title AS assignment_title,c.name AS club_name FROM reports r JOIN assignments a ON a.id=r.assignment_id JOIN clubs c ON c.id=a.club_id WHERE r.scout_id=? ORDER BY r.id DESC',(u['id'],)).fetchall()
-    return page(request,'dashboard.html',assignments=assignments,reports=reports)
+    return page(request,'dashboard.html',assignments=assignments,reports=reports,admin_applications=admin_applications)
 
 @app.get('/assignments/new',response_class=HTMLResponse)
 def new_assignment_page(request:Request):
@@ -550,18 +606,18 @@ def new_assignment_page(request:Request):
     return page(request,'new_assignment.html',clubs=clubs,scouts=scouts)
 
 @app.post('/assignments/new')
-async def new_assignment(request:Request,club_id:int=Form(...),title:str=Form(...),fixture:str=Form(...),match_date:str=Form(''),deadline:str=Form(''),video_url:str=Form(''),instructions:str=Form(''),scout_id:str=Form(''),csrf:str=Form(...)):
+async def new_assignment(request:Request,club_id:int=Form(...),title:str=Form(...),fixture:str=Form(...),match_date:str=Form(''),deadline:str=Form(''),video_url:str=Form(''),instructions:str=Form(''),scout_request:str=Form(''),scout_id:str=Form(''),csrf:str=Form(...)):
     u=require_user(request,('admin','club'));check_token(request,csrf)
     if u['role']=='club' and u['club_id']!=club_id:raise HTTPException(403)
     if not title.strip() or not fixture.strip():raise HTTPException(400,'Titel och match krävs.')
     video=safe_video_url(video_url)
     if video_url.strip() and not video:raise HTTPException(400,'Videolänken måste börja med https:// eller http://')
-    scout=int(scout_id) if scout_id.isdigit() else None
+    scout=int(scout_id) if u['role']=='admin' and scout_id.isdigit() else None
     with db() as con:
         if not con.execute('SELECT 1 FROM clubs WHERE id=?',(club_id,)).fetchone():raise HTTPException(404)
         if scout and not con.execute("SELECT 1 FROM users WHERE id=? AND role='scout'",(scout,)).fetchone():raise HTTPException(400)
-        con.execute('INSERT INTO assignments(club_id,title,fixture,match_date,deadline,video_url,instructions,scout_id,created_at) VALUES (?,?,?,?,?,?,?,?,?)',
-                    (club_id,title.strip()[:160],fixture.strip()[:160],match_date[:20],deadline[:20],video,instructions[:5000],scout,datetime.now().isoformat(timespec='minutes')))
+        con.execute('INSERT INTO assignments(club_id,title,fixture,match_date,deadline,video_url,instructions,scout_request,scout_id,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)',
+                    (club_id,title.strip()[:160],fixture.strip()[:160],match_date[:20],deadline[:20],video,instructions[:5000],scout_request.strip()[:2000],scout,datetime.now().isoformat(timespec='minutes')))
         aid=con.execute('SELECT last_insert_rowid() AS id').fetchone()['id']
     notice(request,'Uppdraget är skapat.')
     return go(f'/assignments/{aid}')
@@ -575,7 +631,7 @@ def assignment_detail(request:Request,aid:int):
         reports=con.execute('SELECT r.*,u.name AS scout_name FROM reports r JOIN users u ON u.id=r.scout_id WHERE r.assignment_id=? ORDER BY r.id DESC',(aid,)).fetchall()
         if u['role']=='club':reports=[r for r in reports if r['status']=='approved']
         elif u['role']=='scout':reports=[r for r in reports if r['scout_id']==u['id']]
-        applicants=con.execute('SELECT ap.*,u.name,u.email FROM applications ap JOIN users u ON u.id=ap.scout_id WHERE ap.assignment_id=?',(aid,)).fetchall() if u['role'] in ('club','admin') else []
+        applicants=con.execute('SELECT ap.*,u.name,u.email FROM applications ap JOIN users u ON u.id=ap.scout_id WHERE ap.assignment_id=?',(aid,)).fetchall() if u['role']=='admin' else []
         has_applied=con.execute('SELECT 1 FROM applications WHERE assignment_id=? AND scout_id=?',(aid,u['id'])).fetchone() is not None if u['role']=='scout' else False
     full=can_access_assignment(u,a,full=True)
     return page(request,'assignment.html',a=a,reports=reports,applicants=applicants,has_applied=has_applied,full=full)
@@ -586,14 +642,13 @@ async def apply(request:Request,aid:int,csrf:str=Form(...)):
     if not a:raise HTTPException(404)
     if a['scout_id']:raise HTTPException(409,'Uppdraget är redan tillsatt.')
     with db() as con:con.execute('INSERT OR IGNORE INTO applications(assignment_id,scout_id,created_at) VALUES (?,?,?)',(aid,u['id'],datetime.now().isoformat(timespec='minutes')))
-    notice(request,'Intresseanmälan skickad till klubben.')
+    notice(request,'Intresseanmälan skickad till Andrablickens administratör.')
     return go(f'/assignments/{aid}')
 
 @app.post('/assignments/{aid}/assign/{scout_id}')
 async def assign(request:Request,aid:int,scout_id:int,csrf:str=Form(...)):
-    u=require_user(request,('admin','club'));check_token(request,csrf);a=fetch_assignment(aid)
+    u=require_user(request,('admin',));check_token(request,csrf);a=fetch_assignment(aid)
     if not a:raise HTTPException(404)
-    if u['role']=='club' and a['club_id']!=u['club_id']:raise HTTPException(403)
     with db() as con:
         if not con.execute("SELECT 1 FROM users WHERE id=? AND role='scout'",(scout_id,)).fetchone():raise HTTPException(400)
         con.execute('UPDATE assignments SET scout_id=? WHERE id=?',(scout_id,aid))
@@ -630,7 +685,7 @@ def edit_report(request:Request,rid:int):
     if not r:raise HTTPException(404)
     if u['role']!='admin' and r['scout_id']!=u['id']:raise HTTPException(403)
     if r['status'] in ('approved','submitted'):raise HTTPException(409,'Rapporten är låst under granskning eller efter godkännande.')
-    return page(request,'edit_report.html',r=r,payload=json.loads(r['payload']),groups=PLAYER_GROUPS if r['kind']=='player' else OPP_GROUPS)
+    return page(request,'edit_report.html',r=r,payload=json.loads(r['payload']),chapters=editor_chapters(r['kind']),time_evidence_fields=TIME_EVIDENCE_FIELDS)
 
 @app.post('/reports/{rid}/save')
 async def save_report(request:Request,rid:int):
@@ -641,14 +696,9 @@ async def save_report(request:Request,rid:int):
     form=await request.form();check_token(request,str(form.get('csrf','')))
     kind=r['kind'];fields=PLAYER_FIELDS if kind=='player' else OPP_FIELDS
     payload={key:str(form.get(key,'')).strip()[:10000] for key,_ in fields}
-    # Positions are edited using the on-page tactical board. Keep this JSON small.
-    raw_tactics=str(form.get('tactics','[]'))[:8000]
-    try:
-        tactics=json.loads(raw_tactics)
-        if not isinstance(tactics,list):tactics=[]
-        tactics=[{'x':max(0,min(1,float(m['x']))),'y':max(0,min(1,float(m['y']))),'team':'b' if m.get('team')=='b' else 'a'} for m in tactics if isinstance(m,dict) and 'x' in m and 'y' in m][:30]
-    except (ValueError,TypeError,KeyError):tactics=[]
-    payload['tactics']=json.dumps(tactics)
+    # Each PDF chapter has its own compact, validated board with players and arrows.
+    raw_tactics=str(form.get('tactics','{}'))[:120000]
+    payload['tactics']=json.dumps(normalize_tactics(raw_tactics),separators=(',',':'))
     action=str(form.get('action','save'))
     if action=='submit' and not any(payload.get(k) for k in ('recommendation','summary')):
         notice(request,'Skriv en rekommendation eller slutsats innan du skickar in rapporten.')
@@ -717,7 +767,7 @@ async def review_report(request:Request,rid:int,decision:str=Form(...),review_no
 
 @app.get('/courses',response_class=HTMLResponse)
 def courses(request:Request):
-    u=require_user(request)
+    u=require_user(request,('scout','admin'))
     with db() as con:
         done={r['lesson_index'] for r in con.execute('SELECT lesson_index FROM lessons WHERE user_id=?',(u['id'],)).fetchall()}
         quiz=con.execute('SELECT * FROM quiz_results WHERE user_id=?',(u['id'],)).fetchone()
@@ -725,13 +775,13 @@ def courses(request:Request):
 
 @app.get('/courses/lesson/{idx}',response_class=HTMLResponse)
 def lesson_page(request:Request,idx:int):
-    u=require_user(request)
+    u=require_user(request,('scout','admin'))
     if idx<0 or idx>=len(COURSE_LESSONS):raise HTTPException(404)
     return page(request,'lesson.html',lesson=COURSE_LESSONS[idx],idx=idx)
 
 @app.post('/courses/lesson/{idx}/complete')
 async def mark_lesson(request:Request,idx:int,csrf:str=Form(...)):
-    u=require_user(request);check_token(request,csrf)
+    u=require_user(request,('scout','admin'));check_token(request,csrf)
     if idx<0 or idx>=len(COURSE_LESSONS):raise HTTPException(404)
     with db() as con:con.execute('INSERT OR IGNORE INTO lessons(user_id,lesson_index,done_at) VALUES (?,?,?)',(u['id'],idx,datetime.now().isoformat(timespec='minutes')))
     notice(request,'Lektionen markerades som genomförd.')
@@ -739,12 +789,12 @@ async def mark_lesson(request:Request,idx:int,csrf:str=Form(...)):
 
 @app.get('/courses/quiz',response_class=HTMLResponse)
 def quiz_page(request:Request):
-    require_user(request)
+    require_user(request,('scout','admin'))
     return page(request,'quiz.html',questions=QUESTIONS)
 
 @app.post('/courses/quiz')
 async def submit_quiz(request:Request):
-    u=require_user(request);form=await request.form();check_token(request,str(form.get('csrf','')))
+    u=require_user(request,('scout','admin'));form=await request.form();check_token(request,str(form.get('csrf','')))
     with db() as con:done=con.execute('SELECT COUNT(*) AS c FROM lessons WHERE user_id=?',(u['id'],)).fetchone()['c']
     if done<len(COURSE_LESSONS):
         notice(request,'Gå igenom alla tre lektioner innan kunskapstestet.')

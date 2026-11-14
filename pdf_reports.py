@@ -5,6 +5,7 @@ from io import BytesIO
 from pathlib import Path
 import re
 import json
+import math
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import landscape, A4
 from reportlab.lib.colors import HexColor
@@ -42,19 +43,23 @@ PLAYER_FIELDS = [
  ('mental','Beslutsfattande och mentala egenskaper'), ('strengths','Tydliga styrkor'),
  ('weaknesses','Utvecklingsområden / risker'),('events','Konkreta matchsituationer + minut'),
  ('rating','Samlad bedömning (1–5)'),('potential','Potential / roll på högre nivå'),
+ ('club_fit','Hur spelaren passar laget som scoutingen görs för'),
  ('recommendation','Rekommendation och nästa steg'),('confidence','Säkerhet i bedömningen / mer underlag')
 ]
 OPP_FIELDS = [
  ('scout_name','Scout'),('team','Motståndarlag'),('opponent','Observerad motpart'),
  ('competition','Serie/tävling'),('match_date','Matchdatum'),('result','Resultat'),('venue','Arena'),('source','Videolänk / observationsmetod'),
- ('game_context','Matchbild / sammanhang'),('starting_eleven','Startelva, roller och byten'),('shape','Utgångsformation'),
- ('recent_form','Senaste resultat / sammanhang'), ('in_possession','Uppspelsmönster'),('out_possession','Försvarsorganisation'),
+ ('game_context','Matchbild med exakta minuter'),('starting_eleven','Startelva, roller och byten'),
+ ('starting_shape','Utgångsformation'),('build_up_shape','Uppspelsformation'),('established_shape','Etableringsformation'),
+ ('shape','Formation / grundstruktur'),('recent_form','3 senaste matchresultaten'),
+ ('before_substitution','Matchbild före byte'),('after_substitution','Matchbild efter byte'),
+ ('in_possession','Uppspelsmönster'),('out_possession','Försvarsorganisation'),
  ('high_press','Presspel och triggers'),('low_block','Lågt och medelhögt försvar'),('transitions_attack','Offensiva omställningar'),
  ('transitions_defense','Defensiva omställningar'),('key_players','Nyckelspelare och matchups'),('bench','Bänk / alternativ'),
  ('set_attacking','Offensiva fasta situationer'),('set_defending','Defensiva fasta situationer'),
  ('corners','Hörnor och varianter'), ('free_kicks','Frisparkar / inkast'),('attack_shape','Anfallsorganisation / ytor'),
  ('defend_shape','Försvarsorganisation / ytor'),('strengths','Motståndarens styrkor'),('weaknesses','Motståndarens svagheter'),
- ('observations','Tidsstämplade observationer'), ('recommendation','Matchplan / rekommendationer'),
+ ('observations','Konkreta matchsituationer med exakt minut'), ('recommendation','Matchplan / rekommendationer'),
  ('summary','Slutsats och tre viktigaste insikterna'),('limitations','Osäkerheter / observationsbegränsningar')
 ]
 
@@ -66,19 +71,19 @@ REPORT_SPECS = {
  ('TEKNISKA EGENSKAPER',[('Första touch, passningar, mottagning, avslut','technical'),('Matchhändelser som stöder bedömningen','events')]),
  ('TAKTISKA EGENSKAPER',[('Positionering, speluppfattning, beslut och tajming','tactical'),('Särskilda styrkor som observerats','strengths')]),
  ('FYSIK OCH MENTALITET',[('Acceleration, snabbhet, löpförmåga och duellspel','physical'),('Arbetsinsats, koncentration, beslutsfattande','mental'),('Utvecklingsområden','weaknesses')]),
- ('SAMMANFATTNING & REKOMMENDATION',[('Samlad bedömning (1–5)','rating'),('Bedömd potential och möjlig roll','potential'),('Rekommendation till klubb och nästa observation','recommendation'),('Bedömningens säkerhet','confidence')]),
+ ('SAMMANFATTNING & REKOMMENDATION',[('Samlad bedömning (1–5)','rating'),('Bedömd potential och möjlig roll','potential'),('Passform i laget som scoutingen görs för','club_fit'),('Rekommendation till klubb och nästa observation','recommendation'),('Bedömningens säkerhet','confidence')]),
  ]},
  'opposition': {'title':'MOTSTÅNDARRAPPORT','subtitle':'Matchanalys, spelmodell och matchplan','pages':[
  ('MATCHINFORMATION',[('Lag, tävling och match','team','opponent','competition','match_date','result','venue'),('Scout och videokälla','scout_name','source')]),
- ('MATCHÖVERSIKT',[('Sammanfattning av matchbilden','game_context'),('Viktiga händelser och tidsstämplar','observations')]),
- ('LAGUPPSTÄLLNING',[('Startelva, byten och roller','starting_eleven'),('Nyckelspelare','key_players')]),
- ('FORMATION & FORM',[('Utgångsformation','shape'),('Senaste resultat och kontext','recent_form'),('Viktig information','strengths')]),
- ('FORMATION ÖVER MATCHENS FASER',[('Formation med boll','attack_shape'),('Formation utan boll','defend_shape'),('Förändringar efter byten','bench')]),
+ ('MATCHBILD & LAGUPPSTÄLLNING',[('Sammanfattning av matchbilden med exakta minuter','game_context'),('Laguppställning och formationer','starting_eleven','starting_shape','build_up_shape','established_shape'),('Viktiga händelser – en situation per punkt med exakt minut','observations')]),
+ ('LAGUPPSTÄLLNING & BYTEN',[('Startelva, byten och roller','starting_eleven'),('Matchbild före första betydande byte','before_substitution'),('Matchbild efter första betydande byte','after_substitution')]),
+ ('FORMATION & FORM',[('Utgångsformation','starting_shape'),('Grundstruktur och formationsförändringar','shape'),('3 senaste matchresultaten','recent_form'),('Viktig information','strengths')]),
+ ('FORMATION ÖVER MATCHENS FASER',[('Uppspelsformation','build_up_shape'),('Etableringsformation','established_shape'),('Förändringar efter byten','bench')]),
  ('SPELARANALYS: STARTELVA',[('Nyckelspelare, nummer, roll och beteenden','key_players'),('Dynamik och relationer i lagdelarna','observations')]),
  ('SPELARANALYS: BÄNK & ALTERNATIV',[('Avbytare, alternativa uppställningar','bench'),('Risker och möjligheter vid byten','weaknesses')]),
  ('FASTA SITUATIONER: ANFALL',[('Offensiva hörnor och frisparkar','set_attacking'),('Hörnvarianter och löpvägar','corners')]),
  ('FASTA SITUATIONER: FÖRSVAR',[('Markering, zon, andra bollar','set_defending'),('Frisparkar och inkast','free_kicks')]),
- ('FÖRSVARSORGANISATION',[('Presshöjd, linjer och avstånd','defend_shape'),('Utlösande pressignaler','high_press'),('Lågt och medelhögt block','low_block')]),
+ ('FÖRSVARSORGANISATION',[('Presshöjd, linjer och avstånd','defend_shape'),('Försvarsprinciper utan boll','out_possession'),('Utlösande pressignaler','high_press'),('Lågt och medelhögt block','low_block')]),
  ('ANFALLSORGANISATION',[('Uppspel, progression och överbelastningar','attack_shape'),('Mönster och prioriterade ytor','in_possession')]),
  ('OMSTÄLLNINGSSPEL',[('Offensiva omställningar','transitions_attack'),('Defensiva omställningar','transitions_defense'),('Press och återerövring','high_press')]),
  ('STYRKOR OCH SÅRBARHETER',[('Övergripande styrkor','strengths'),('Så kan motståndaren angripas','weaknesses'),('Matchbild / balans','game_context')]),
@@ -204,7 +209,17 @@ def _pitch_geometry(x,y,w,h):
     frame_y=y+(h-frame_h)/2
     return frame_x,frame_y,frame_w,frame_h,frame_x+margin,frame_y+margin+caption_space,pw,ph
 
-def _pitch(c,x,y,w,h,markers=None):
+def _marker_number(marker,team_counts):
+    team='b' if marker.get('team')=='b' else 'a'
+    try:number=int(marker.get('number',0))
+    except (TypeError,ValueError):number=0
+    if number<1:
+        team_counts[team]+=1
+        number=team_counts[team]
+    else:team_counts[team]=max(team_counts[team],number)
+    return number
+
+def _pitch(c,x,y,w,h,markers=None,arrows=None):
     """Original football diagram, ready for pen annotation or digital player markers."""
     frame_x,frame_y,frame_w,frame_h,px,py,pw,ph=_pitch_geometry(x,y,w,h)
     c.setFillColor(HexColor('#E5EDE4'))
@@ -222,7 +237,22 @@ def _pitch(c,x,y,w,h,markers=None):
     c.rect(px+pw*.93,py+ph*.38,pw*.07,ph*.24,fill=0,stroke=1)
     c.setFillColor(GREY);c.setFont(REG,7)
     c.drawString(px,frame_y+8,'TACTICAL BOARD  /  MARKERA POSITIONER OCH RÖRELSER')
-    for i,marker in enumerate((markers or [])[:30]):
+    for arrow in (arrows or [])[:40]:
+        try:
+            x1=max(0,min(1,float(arrow.get('x1',0.5))));y1=max(0,min(1,float(arrow.get('y1',0.5))))
+            x2=max(0,min(1,float(arrow.get('x2',0.5))));y2=max(0,min(1,float(arrow.get('y2',0.5))))
+            sx=px+x1*pw;sy=py+(1-y1)*ph;ex=px+x2*pw;ey=py+(1-y2)*ph
+            color=HexColor('#78951E') if arrow.get('team')=='a' else DARK
+            c.setStrokeColor(color);c.setFillColor(color);c.setLineWidth(2.4)
+            c.line(sx,sy,ex,ey)
+            angle=math.atan2(ey-sy,ex-sx);head=9
+            left=(ex-head*math.cos(angle-.55),ey-head*math.sin(angle-.55))
+            right=(ex-head*math.cos(angle+.55),ey-head*math.sin(angle+.55))
+            path=c.beginPath();path.moveTo(ex,ey);path.lineTo(*left);path.lineTo(*right);path.close()
+            c.drawPath(path,stroke=0,fill=1)
+        except (TypeError,ValueError):continue
+    team_counts={'a':0,'b':0}
+    for marker in (markers or [])[:30]:
         try:
             mx=max(0,min(1,float(marker.get('x',0.5))))
             my=max(0,min(1,float(marker.get('y',0.5))))
@@ -232,10 +262,27 @@ def _pitch(c,x,y,w,h,markers=None):
             c.setStrokeColor(DARK if team=='a' else LIME)
             c.circle(cx,cy,8,fill=1,stroke=1)
             c.setFillColor(DARK if team=='a' else WHITE)
-            c.setFont(BOLD,6.6);c.drawCentredString(cx,cy-2.6,str(i+1))
+            number=_marker_number(marker,team_counts)
+            c.setFont(BOLD,6.6);c.drawCentredString(cx,cy-2.6,str(number))
         except Exception:continue
 
-def _inner(c, spec, index, total, page, data,overflow,report_kind):
+def _chapter_tactics(data,chapter_key,title):
+    """Return one chapter board while keeping legacy single-board reports readable."""
+    raw=data.get('tactics','')
+    try:tactics=json.loads(raw) if isinstance(raw,str) else raw
+    except (ValueError,TypeError):tactics={}
+    if isinstance(tactics,dict):
+        board=tactics.get(chapter_key,{})
+        if isinstance(board,dict):
+            markers=board.get('markers',[]);arrows=board.get('arrows',[])
+            return (markers if isinstance(markers,list) else [],arrows if isinstance(arrows,list) else [])
+        return [],[]
+    legacy_diagrams={'FORMATION OCH POSITION','FORMATION & FORM','FORMATION ÖVER MATCHENS FASER',
+        'FASTA SITUATIONER: ANFALL','FASTA SITUATIONER: FÖRSVAR',
+        'FÖRSVARSORGANISATION','ANFALLSORGANISATION','OMSTÄLLNINGSSPEL'}
+    return (tactics,[]) if isinstance(tactics,list) and title in legacy_diagrams else ([],[])
+
+def _inner(c, spec, index, total, page, data,overflow,report_kind,chapter_key):
     title,groups = page
     _brand(c,spec['title'],index,total)
     c.setFillColor(INK);c.setFont(BOLD,20);c.drawString(36,PAGE_H-105,title)
@@ -248,17 +295,10 @@ def _inner(c, spec, index, total, page, data,overflow,report_kind):
     if n==2: weights=[1.15,1]
     elif n==3: weights=[.9,1.1,1]
     elif n==4: weights=[1,1,1,1]
-    diagram_titles=['FORMATION OCH POSITION','FORMATION & FORM','FORMATION ÖVER MATCHENS FASER',
-         'FASTA SITUATIONER: ANFALL','FASTA SITUATIONER: FÖRSVAR',
-         'FÖRSVARSORGANISATION','ANFALLSORGANISATION','OMSTÄLLNINGSSPEL']
-    if title in diagram_titles:
+    markers,arrows=_chapter_tactics(data,chapter_key,title)
+    if markers or arrows:
         pitch_w=356
-        raw=data.get('tactics','')
-        try:
-            markers=json.loads(raw) if raw else []
-            if not isinstance(markers,list):markers=[]
-        except (ValueError,TypeError):markers=[]
-        _pitch(c,36,53,pitch_w,usable,markers)
+        _pitch(c,36,53,pitch_w,usable,markers,arrows)
         field_x=36+pitch_w+15
         field_w=PAGE_W-36-field_x
     else:field_x=36;field_w=PAGE_W-72
@@ -311,7 +351,7 @@ def render_pdf(kind='player',data=None):
     overflow=[]
     _cover(c,spec,kind,data);c.showPage()
     for idx,page in enumerate(spec['pages'],start=2):
-        _inner(c,spec,idx,total,page,data,overflow,kind);c.showPage()
+        _inner(c,spec,idx,total,page,data,overflow,kind,f'chapter_{idx-1:02d}');c.showPage()
     if overflow:
         # Preserve first occurrence for values that appear in multiple summaries.
         seen=set();unique=[]

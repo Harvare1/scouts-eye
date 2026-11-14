@@ -62,6 +62,7 @@ def test_complete_assignment_report_review_and_tenant_flow(monkeypatch, tmp_path
                 "deadline": "2026-11-20",
                 "video_url": "https://example.com/licensed-match",
                 "instructions": "Bedöm spelaren med konkreta observationer.",
+                "scout_request": "Önskar erfarenhet av centrala mittfältare.",
                 "scout_id": str(scout_id),
             },
             follow_redirects=False,
@@ -69,10 +70,40 @@ def test_complete_assignment_report_review_and_tenant_flow(monkeypatch, tmp_path
         assert response.status_code == 303
         assignment_id = int(response.headers["location"].rsplit("/", 1)[1])
 
+        with module.db() as connection:
+            created = connection.execute(
+                "SELECT scout_id,scout_request FROM assignments WHERE id=?", (assignment_id,)
+            ).fetchone()
+            assert created["scout_id"] is None
+            assert "centrala mittfältare" in created["scout_request"]
+
         with TestClient(module.app, base_url="http://testserver") as scout:
             login(scout, "scout")
             assignment_page = scout.get(f"/assignments/{assignment_id}")
             assert assignment_page.status_code == 200
+            assert "https://example.com/licensed-match" not in assignment_page.text
+            response = scout.post(
+                f"/assignments/{assignment_id}/apply",
+                data={"csrf": csrf_from(assignment_page)},
+                follow_redirects=False,
+            )
+            assert response.status_code == 303
+
+        with TestClient(module.app, base_url="http://testserver") as admin:
+            login(admin, "admin")
+            dashboard = admin.get("/app")
+            assert "1 scoutansökan" in dashboard.text
+            assert "Integrationsuppdrag" in dashboard.text
+            response = admin.post(
+                f"/assignments/{assignment_id}/assign/{scout_id}",
+                data={"csrf": csrf_from(dashboard)},
+                follow_redirects=False,
+            )
+            assert response.status_code == 303
+
+        with TestClient(module.app, base_url="http://testserver") as scout:
+            login(scout, "scout")
+            assignment_page = scout.get(f"/assignments/{assignment_id}")
             assert "https://example.com/licensed-match" in assignment_page.text
             response = scout.post(
                 f"/assignments/{assignment_id}/reports",
