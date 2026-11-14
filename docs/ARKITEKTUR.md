@@ -22,7 +22,7 @@ En mer detaljerad kombinerad karta finns i [andrablicken-arkitektur.svg](andrabl
 
 ## När någon öppnar webbplatsen
 
-1. DNS för `andrablicken.knegare.eu` pekar på Proxy-LB. Den tidigare adressen `scouts-eye.knegare.eu` omdirigeras permanent hit.
+1. DNS för `scouts-eye.knegare.eu` pekar på Proxy-LB. Båda adresserna finns i Caddy under övergången; `andrablicken.knegare.eu` blir huvuddomän när dess DNS och HTTPS har verifierats.
 2. Caddy på Proxy-LB avslutar HTTPS och lägger till säkerhetsheaders.
 3. Caddy skickar begäran till Appserver1 på port `8091`.
 4. Docker mappar port `8091` till FastAPI-containerns port `8000`.
