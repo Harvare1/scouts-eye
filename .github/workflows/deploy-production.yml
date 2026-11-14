@@ -79,7 +79,7 @@ jobs:
             printf 'ANDRABLICKEN_ENV=production\n'
             printf 'ANDRABLICKEN_STORAGE=/app/data\n'
             printf 'ANDRABLICKEN_SESSION_SECRET=%s\n' "$session_secret"
-            printf 'ANDRABLICKEN_ALLOWED_HOSTS=scouts-eye.knegare.eu,127.0.0.1,localhost,82.197.73.183\n'
+            printf 'ANDRABLICKEN_ALLOWED_HOSTS=andrablicken.knegare.eu,scouts-eye.knegare.eu,127.0.0.1,localhost,82.197.73.183\n'
             printf 'ANDRABLICKEN_ALLOW_REGISTRATION=0\n'
             printf 'ANDRABLICKEN_SEED_DEMO=0\n'
             printf 'ANDRABLICKEN_BOOTSTRAP_ADMIN_USERNAME=malte\n'
@@ -174,19 +174,36 @@ jobs:
           set -euo pipefail
           install -d -m 0755 /etc/caddy/sites /etc/caddy/backups
           timestamp=$(date -u +%Y%m%dT%H%M%SZ)
-          backup=/etc/caddy/backups/scouts-eye.caddy.$timestamp
-          if [ -f /etc/caddy/sites/scouts-eye.caddy ]; then
-            cp -a /etc/caddy/sites/scouts-eye.caddy "$backup"
+          old_route=/etc/caddy/sites/scouts-eye.caddy
+          new_route=/etc/caddy/sites/andrablicken.caddy
+          old_backup=/etc/caddy/backups/scouts-eye.caddy.$timestamp
+          new_backup=/etc/caddy/backups/andrablicken.caddy.$timestamp
+          if [ -f "$old_route" ]; then
+            cp -a "$old_route" "$old_backup"
           fi
-          install -m 0644 /tmp/andrablicken.caddy /etc/caddy/sites/scouts-eye.caddy
+          if [ -f "$new_route" ]; then
+            cp -a "$new_route" "$new_backup"
+          fi
+          install -m 0644 /tmp/andrablicken.caddy "$new_route"
+          rm -f "$old_route"
 
           if ! caddy validate --config /etc/caddy/Caddyfile; then
-            [ -f "$backup" ] && cp -a "$backup" /etc/caddy/sites/scouts-eye.caddy
+            [ -f "$old_backup" ] && cp -a "$old_backup" "$old_route"
+            if [ -f "$new_backup" ]; then
+              cp -a "$new_backup" "$new_route"
+            else
+              rm -f "$new_route"
+            fi
             echo 'Caddy validation failed; previous route restored' >&2
             exit 1
           fi
           if ! systemctl reload caddy; then
-            [ -f "$backup" ] && cp -a "$backup" /etc/caddy/sites/scouts-eye.caddy
+            [ -f "$old_backup" ] && cp -a "$old_backup" "$old_route"
+            if [ -f "$new_backup" ]; then
+              cp -a "$new_backup" "$new_route"
+            else
+              rm -f "$new_route"
+            fi
             caddy validate --config /etc/caddy/Caddyfile
             systemctl reload caddy
             echo 'Caddy reload failed; previous route restored' >&2
@@ -199,10 +216,12 @@ jobs:
         run: |
           curl --fail --show-error --silent \
             --retry 12 --retry-delay 5 --retry-all-errors \
-            https://scouts-eye.knegare.eu/health \
+            https://andrablicken.knegare.eu/health \
             | python3 -c 'import json,sys; assert json.load(sys.stdin)=={"status":"ok","mode":"production"}'
-          curl --fail --show-error --silent https://scouts-eye.knegare.eu/ \
+          curl --fail --show-error --silent https://andrablicken.knegare.eu/ \
             | grep --quiet 'ANDRABLICKEN'
+          test "$(curl --fail --show-error --silent --output /dev/null --write-out '%{redirect_url}' https://scouts-eye.knegare.eu/)" = \
+            'https://andrablicken.knegare.eu/'
 
   retire-old-app:
     name: Retire old Scout's Eye containers
