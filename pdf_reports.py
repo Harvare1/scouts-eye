@@ -411,6 +411,26 @@ def render_scout_profile_pdf(data,verified_assignments=None,verified_reports=Non
     doc.build(story,onFirstPage=footer,onLaterPages=footer)
     return buf.getvalue()
 
+def render_course_certificate_pdf(name,course_title,issued_at,code,verification_url):
+    """Create an original Andrablicken course certificate with a public verification code."""
+    buf=BytesIO();c=canvas.Canvas(buf,pagesize=landscape(A4),pageCompression=1)
+    c.setTitle(f'Andrablicken kursintyg - {_safe(name)}');c.setAuthor('Andrablicken Academy')
+    c.setFillColor(DARK);c.rect(0,0,PAGE_W,PAGE_H,fill=1,stroke=0)
+    c.setStrokeColor(LIME);c.setLineWidth(2);c.rect(24,24,PAGE_W-48,PAGE_H-48,fill=0,stroke=1)
+    c.setStrokeColor(HexColor('#47634D'));c.setLineWidth(1);c.rect(34,34,PAGE_W-68,PAGE_H-68,fill=0,stroke=1)
+    c.setFillColor(LIME);c.setFont(BOLD,18);c.drawCentredString(PAGE_W/2,PAGE_H-78,'ANDRABLICKEN ACADEMY')
+    c.setFillColor(WHITE);c.setFont(BOLD,34);c.drawCentredString(PAGE_W/2,PAGE_H-145,'KURSINTYG')
+    c.setFillColor(HexColor('#B8C7B5'));c.setFont(REG,12);c.drawCentredString(PAGE_W/2,PAGE_H-185,'Detta intyg bekräftar att')
+    c.setFillColor(LIME);c.setFont(BOLD,25);c.drawCentredString(PAGE_W/2,PAGE_H-225,_safe(name)[:70])
+    c.setFillColor(WHITE);c.setFont(REG,12);c.drawCentredString(PAGE_W/2,PAGE_H-260,'har genomfört kunskapstest och godkänd manuell praktisk examination i')
+    c.setFont(BOLD,20);c.drawCentredString(PAGE_W/2,PAGE_H-300,_safe(course_title)[:85])
+    c.setFillColor(HexColor('#B8C7B5'));c.setFont(REG,9)
+    c.drawCentredString(PAGE_W/2,112,'Intyget beskriver genomförd utbildning och ger inte i sig behörighet eller garanti till klubbuppdrag.')
+    c.setFillColor(WHITE);c.setFont(BOLD,9);c.drawString(62,72,f'UTFÄRDAT  {_safe(issued_at)[:10]}')
+    c.drawRightString(PAGE_W-62,72,f'INTYGSKOD  {_safe(code)}')
+    c.setFillColor(HexColor('#8FA18E'));c.setFont(REG,7.5);c.drawCentredString(PAGE_W/2,49,'Verifiera intyget: '+_safe(verification_url)[:120])
+    c.save();buf.seek(0);return buf.getvalue()
+
 if __name__=='__main__':
     target=Path(__file__).parent/'static'
     (target/'spelarrapport-mall.pdf').write_bytes(render_pdf('player'))

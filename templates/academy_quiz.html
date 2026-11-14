@@ -1,0 +1,4 @@
+{% extends 'base.html' %}{% block title %}Kunskapstest{% endblock %}{% block content %}
+<div class="eyebrow"><a href="/courses/{{course['slug']}}">{{course['title']}}</a> / Kunskapstest</div><h1 class="title">KUNSKAPSTEST.</h1><p class="subtitle">Tio frågor rättas på servern. Minst 8 av 10 rätt krävs. Efter inlämning får du förklaringar till samtliga svar.</p>
+<form method="post" action="/courses/{{course['id']}}/quiz"><input type="hidden" name="csrf" value="{{csrf}}">{% for q in questions %}<div class="card quiz-card"><span class="eyebrow">Fråga {{loop.index}} av {{questions|length}}</span><h2 class="h3">{{q['question']}}</h2>{% for answer in q['choices'] %}<label class="quiz-choice"><input type="radio" name="q{{q['id']}}" value="{{loop.index0}}" required> {{answer}}</label>{% endfor %}</div>{% endfor %}<button class="btn">Rätta testet på servern →</button></form>
+{% endblock %}

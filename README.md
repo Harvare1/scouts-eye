@@ -58,6 +58,14 @@ Motståndarrapporten skiljer mellan utgångs-, uppspels- och etableringsformatio
 
 Klubbkonton skapar uppdrag men kan inte välja eller tilldela scout. De kan lämna ett scoutönskemål som möjlig tilläggstjänst. Scouter anmäler intresse och administratören får en tydlig notifiering i adminpanelen för att granska profil och tilldela uppdraget. Scout Academy visas endast för scout och admin; klubbrollen blockeras även på serversidan.
 
+## Andrablicken Academy
+
+Academy är integrerad i samma FastAPI-app, SQLite-databas och användarsystem. Grundkursen **Introduktion till fotbollsscouting** innehåller sex svenska lektioner med lärandemål, originaltext, egna illustrationer, praktiska reflektioner och kunskapsfrågor med förklaringar. Progression autosparas genom ett CSRF-skyddat API. Det avslutande kunskapstestet har tio serverrättade frågor och kräver minst 8/10.
+
+Praktisk examination skapar en separat Academy-rapport i den befintliga rapporteditorn. Academy-uppdrag filtreras bort från riktiga klubbuppdrag och verifierade scoutmeriter. Administratören bedömer rapporten manuellt enligt en 100-poängsmatris, kan begära komplettering och kan först vid minst 70 poäng utan kritisk sekretess-/integritetsbrist utfärda ett offentligt verifierbart PDF-intyg. Kursintyg ger aldrig automatiskt behörighet till klubbuppdrag.
+
+Kurser, moduler och lektioner hanteras under `/admin/academy`; examinationskön finns under `/admin/academy/examinations`. Kurskatalog och kursdata lagras i `academy_*`-tabeller. Fördjupningskurserna **Spelaridentifiering och rekrytering** och **Motståndaranalys och taktisk scouting** finns som betalda, låsta utkast och är inte köpbara. Samtliga tre kurser har status `draft` tills innehållet har kvalitetssäkrats.
+
 ## Scoutprofiler och fotbolls-CV
 
 Scouter hanterar sin profil via **Scoutprofil** i huvudmenyn. Profilen innehåller fotbollsbakgrund, erfarenhet, egna meriter, kompetenser, språk, tillgänglighet och ett valfritt PDF-CV på högst 8 MB. Hela profilen kan exporteras som en separat Andrablicken-PDF.

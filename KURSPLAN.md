@@ -1,6 +1,6 @@
 # Andrablicken Scout Academy – kursstruktur (arbetsförslag)
 
-**Status:** Kursidé och pedagogisk struktur. Endast den kostnadsfria minikursen med tre textlektioner och kunskapstest finns i pilotportalen. Betalda kurser är **inte** färdigproducerade.
+**Status:** Grundkursens sex lektioner, tiufrågorstest, rapportbaserade examination, manuella bedömningsmatris och verifierbara kursintyg är implementerade som ett kvalitetssäkringsutkast i pilotportalen. Fördjupningskurserna finns som låsta kurs- och modulutkast. Inga kurser är färdigproducerade eller öppna för försäljning.
 
 ## Kurs 1 – Introduktion till scouting
 

@@ -1,0 +1,31 @@
+{% extends 'base.html' %}{% block title %}{{lesson['title']}}{% endblock %}{% block content %}
+<div class="eyebrow"><a href="/courses">Academy</a> / <a href="/courses/{{lesson['course_slug']}}">{{lesson['course_title']}}</a> / Lektion {{'%02d'|format(lesson['position'])}}</div>
+<h1 class="title">{{lesson['title']|upper}}.</h1>
+<div class="lesson-objective"><span class="eyebrow">Lärandemål</span><p>{{lesson['learning_objective']}}</p></div>
+
+<article class="card academy-lesson-copy"><h2 class="h2">Undervisningsmaterial</h2><div class="preline lesson-body">{{lesson['body']}}</div></article>
+{% if lesson['video_url'] %}<aside class="card academy-video"><span class="eyebrow">Licensierat videomaterial</span><p>Videon öppnas hos rättighetsinnehavaren. Dela inte länken utanför kursen.</p><a class="btn outline" href="{{lesson['video_url']}}" target="_blank" rel="noopener noreferrer">Öppna kursvideon ↗</a></aside>{% endif %}
+
+<section class="academy-illustration {{lesson['diagram_kind']}}" aria-label="Egen taktisk illustration för lektionen">
+{% if lesson['diagram_kind']=='phase-board' %}
+  <div class="panel-head"><div><span class="eyebrow">Interaktiv taktiktavla</span><h2 class="h2">Sjöstad IF i två spelfaser</h2></div><div class="phase-switch"><button type="button" data-phase="with" class="selected">Med boll · 3-2-5</button><button type="button" data-phase="without">Utan boll · 4-5-1</button></div></div><canvas id="academy-phase-board" width="840" height="544" aria-label="Interaktiv plan som växlar mellan formation med och utan boll"></canvas><p id="phase-caption" class="small muted">Med boll: vänsterbacken flyttar in och sexan sjunker mellan mittbackarna.</p>
+{% elif lesson['diagram_kind']=='decision-chain' %}<div class="diagram-flow"><div><span>01</span><strong>Observation</strong><small>Vad såg vi?</small></div><i>→</i><div><span>02</span><strong>Tolkning</strong><small>Vad kan det betyda?</small></div><i>→</i><div><span>03</span><strong>Rekommendation</strong><small>Vad bör klubben göra?</small></div></div>
+{% elif lesson['diagram_kind']=='player-lens' %}<div class="lens-grid">{% for item in [('Teknik','Förstatouch · passning'),('Taktik','Positionering · scanning'),('Fysik','Acceleration · uthållighet'),('Beteende','Kommunikation · reaktion')] %}<div><span>{{loop.index}}</span><strong>{{item[0]}}</strong><small>{{item[1]}}</small></div>{% endfor %}</div>
+{% elif lesson['diagram_kind']=='press-solutions' %}<div class="scenario-grid"><div><span class="eyebrow">Situation A · 12:10</span><div class="mini-pitch"><b class="ball p1"></b><i class="route r1"></i><em>6</em></div><p>Sexan sjunker mot bollen och skapar en central passningslinje.</p></div><div><span class="eyebrow">Situation B · 31:45</span><div class="mini-pitch"><b class="ball p2"></b><i class="route r2"></i><em>2</em></div><p>Ytterbacken stannar brett och målvakten spelar förbi första pressen.</p></div></div>
+{% elif lesson['diagram_kind']=='evidence-chain' %}<div class="evidence-diagram"><div><strong>18:40</strong><span>Högerback högt</span></div><div><strong>32:15</strong><span>Samma rörelse</span></div><i>→</i><div><strong>Möjlig yta</strong><span>Bakom ytterback</span></div><i>→</i><div><strong>Testa</strong><span>Snabb spelvändning</span></div></div>
+{% else %}<div class="ethics-grid">{% for item in [('Privat länk','Har jag rätt att öppna och dela?'),('Intressekonflikt','Vem representerar jag?'),('Minderårig','Finns rätt rutiner och åtkomst?')] %}<div><span>0{{loop.index}}</span><strong>{{item[0]}}</strong><small>{{item[1]}}</small></div>{% endfor %}</div>{% endif %}
+</section>
+
+<section class="grid cols2 lesson-practice"><div class="card"><span class="eyebrow">Fotbollsexempel</span><p class="preline">{{lesson['example']}}</p></div><div class="card"><span class="eyebrow">Praktisk reflektionsövning</span><p>{{lesson['exercise']}}</p></div></section>
+
+{% if enrollment %}<form id="lesson-progress-form" class="card" data-endpoint="/api/academy/lessons/{{lesson['id']}}/progress" data-csrf="{{csrf}}">
+  <span class="eyebrow">Din inlämning · autosparas</span><label class="field"><span>Reflektion / övningssvar</span><textarea id="lesson-reflection" rows="7" placeholder="Skriv ditt konkreta svar här...">{{progress['reflection'] if progress else ''}}</textarea><small id="autosave-status">{% if progress %}Senast sparat i din progression.{% else %}Texten sparas automatiskt när du skriver.{% endif %}</small></label>
+  {% if question %}<fieldset class="lesson-question"><legend>{{question['question']}}</legend>{% for choice in question['choices'] %}<label class="quiz-choice"><input type="radio" name="lesson-answer" value="{{loop.index0}}" {% if progress and progress['answer_index']==loop.index0 %}checked{% endif %}> {{choice}}</label>{% endfor %}</fieldset>{% endif %}
+  <div id="lesson-feedback" class="info" {% if not progress or progress['answer_index'] is none %}hidden{% endif %}>{% if progress %}{{question['explanation']}}{% endif %}</div>
+  <button class="btn" type="submit">Kontrollera svar och slutför lektionen →</button>
+  {% if progress and progress['completed_at'] %}<span class="tag approved">Genomförd {{progress['completed_at'][:10]}}</span>{% endif %}
+</form>{% else %}<div class="info">Administratörsförhandsvisning. Progression sparas endast för registrerade scoutdeltagare.</div>{% endif %}
+
+<div class="lesson-nav">{% for item in siblings %}{% if item['id']==lesson['id'] %}{% if not loop.first %}<a class="btn outline" href="/courses/lessons/{{siblings[loop.index0-1]['id']}}">← Föregående</a>{% endif %}{% if not loop.last %}<a class="btn" href="/courses/lessons/{{siblings[loop.index0+1]['id']}}">Nästa lektion →</a>{% else %}<a class="btn" href="/courses/{{lesson['course_slug']}}">Till kursöversikten →</a>{% endif %}{% endif %}{% endfor %}</div>
+<script src="/static/academy-lesson.js" defer></script>
+{% endblock %}
