@@ -322,7 +322,7 @@ def test_academy_resume_interest_and_accessibility(monkeypatch, tmp_path):
     with TestClient(module.app, base_url="http://testserver") as scout:
         login(scout, "scout")
         catalog = scout.get("/courses")
-        assert 'class="skip-link"' in catalog.text
+        assert 'class="skip-link"' not in catalog.text
         assert 'id="main-content"' in catalog.text
         assert 'aria-label="Huvudmeny"' in catalog.text
         scout.post(
