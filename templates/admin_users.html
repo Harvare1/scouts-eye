@@ -1,14 +1,124 @@
 {% extends 'base.html' %}{% block title %}Klubbar och konton{% endblock %}{% block content %}
-<div class="eyebrow">Andrablicken / Administration</div><h1 class="title">KLUBBAR & KONTON.</h1><p class="subtitle">Skapa pilotkonton, koppla klubbkonton till rätt klubb och avsluta åtkomst när den inte längre behövs.</p>
+<div class="eyebrow">Andrablicken / Administration</div>
+<h1 class="title">KLUBBAR & KONTON.</h1>
+<p class="subtitle">Skapa pilotkonton, koppla klubbkonton till rätt klubb och avsluta åtkomst när den inte längre behövs.</p>
 
-<div class="grid cols3" style="margin:28px 0"><div class="card"><span class="eyebrow">Klubbar</span><div class="dashboard-number">{{clubs|length}}</div></div><div class="card"><span class="eyebrow">Aktiva konton</span><div class="dashboard-number">{{users|selectattr('active','equalto',1)|list|length}}</div></div><div class="card"><span class="eyebrow">Avstängda konton</span><div class="dashboard-number">{{users|rejectattr('active','equalto',1)|list|length}}</div></div></div>
+<div class="grid cols3" style="margin:28px 0">
+  <div class="card"><span class="eyebrow">Klubbar</span><div class="dashboard-number">{{clubs|length}}</div></div>
+  <div class="card"><span class="eyebrow">Aktiva konton</span><div class="dashboard-number">{{users|selectattr('active','equalto',1)|list|length}}</div></div>
+  <div class="card"><span class="eyebrow">Avstängda konton</span><div class="dashboard-number">{{users|rejectattr('active','equalto',1)|list|length}}</div></div>
+</div>
 
-<div class="grid cols2"><div class="card"><h2 class="h2" style="margin-top:0">Skapa klubb</h2><form method="post" action="/admin/clubs"><input type="hidden" name="csrf" value="{{csrf}}"><label class="field"><span>Klubbnamn</span><input name="name" required maxlength="120" placeholder="Exempel IF"></label><button class="btn" type="submit">Skapa klubb →</button></form><hr class="line"><h3 class="h3">Befintliga klubbar</h3><p class="small muted">Namnbyte behåller klubbens konton, uppdrag och rapporthistorik.</p>{% for club in clubs %}<div class="card" id="club-{{club['id']}}" style="margin-top:12px"><div class="panel-head"><div><strong>{{club['name']}}</strong><div class="meta">{{club['active_user_count']}} aktiva av {{club['user_count']}} konton · {{club['assignment_count']}} uppdrag</div></div>{% if club['name']=='Andrablicken Academy' %}<span class="tag">Systemklubb</span>{% endif %}</div>{% if club['name']!='Andrablicken Academy' %}<form method="post" action="/admin/clubs/{{club['id']}}/update"><input type="hidden" name="csrf" value="{{csrf}}"><label class="field"><span>Klubbnamn</span><input name="name" value="{{club['name']}}" required maxlength="120"></label><button class="btn small outline" type="submit">Spara klubbnamn</button></form>{% else %}<p class="small muted">Används internt för Academy-examinationer och kan inte ändras.</p>{% endif %}{% if club['user_count'] %}<details class="report-section"><summary>Visa kopplade konton</summary><div class="inner">{% for account in users if account['club_id']==club['id'] %}<a class="list-item" href="#user-{{account['id']}}"><span>{{account['name']}} · @{{account['username']}}</span><span class="tag {{'approved' if account['active'] else 'changes_requested'}}">{{'Aktiv' if account['active'] else 'Avstängd'}}</span></a>{% endfor %}</div></details>{% endif %}</div>{% else %}<p class="muted">Ingen klubb har skapats ännu.</p>{% endfor %}</div>
+<div class="grid cols2">
+  <div class="card">
+    <h2 class="h2" style="margin-top:0">Skapa klubb</h2>
+    <form method="post" action="/admin/clubs">
+      <input type="hidden" name="csrf" value="{{csrf}}">
+      <label class="field"><span>Klubbnamn</span><input name="name" required maxlength="120" placeholder="Exempel IF"></label>
+      <button class="btn" type="submit">Skapa klubb →</button>
+    </form>
+    <hr class="line">
+    <h3 class="h3">Befintliga klubbar</h3>
+    <p class="small muted">Klicka på en klubb för att visa konton och redigering. Namnbyte behåller uppdrag och rapporthistorik.</p>
+    <div class="entity-list">
+      {% for club in clubs %}
+      <details class="entity-card" id="club-{{club['id']}}">
+        <summary>
+          <span class="entity-summary-main"><strong>{{club['name']}}</strong><span>{{club['active_user_count']}} aktiva konton · {{club['assignment_count']}} uppdrag</span></span>
+          {% if club['name']=='Andrablicken Academy' %}<span class="tag">Systemklubb</span>{% else %}<span class="tag">Klubb</span>{% endif %}
+        </summary>
+        <div class="entity-body">
+          <div class="meta">{{club['active_user_count']}} aktiva av {{club['user_count']}} kopplade konton · {{club['assignment_count']}} uppdrag</div>
+          {% if club['name']!='Andrablicken Academy' %}
+          <form method="post" action="/admin/clubs/{{club['id']}}/update" class="entity-form">
+            <input type="hidden" name="csrf" value="{{csrf}}">
+            <label class="field"><span>Klubbnamn</span><input name="name" value="{{club['name']}}" required maxlength="120"></label>
+            <button class="btn small outline" type="submit">Spara klubbnamn</button>
+          </form>
+          {% else %}
+          <p class="small muted">Används internt för Academy-examinationer och kan inte ändras.</p>
+          {% endif %}
+          {% if club['user_count'] %}
+          <div class="linked-accounts">
+            <strong>Kopplade konton</strong>
+            {% for account in users if account['club_id']==club['id'] %}
+            <a class="list-item" href="#user-{{account['id']}}"><span>{{account['name']}} · @{{account['username']}}</span><span class="tag {{'approved' if account['active'] else 'changes_requested'}}">{{'Aktiv' if account['active'] else 'Avstängd'}}</span></a>
+            {% endfor %}
+          </div>
+          {% endif %}
+        </div>
+      </details>
+      {% else %}<p class="muted">Ingen klubb har skapats ännu.</p>{% endfor %}
+    </div>
+  </div>
 
-<div class="card"><h2 class="h2" style="margin-top:0">Skapa konto</h2><form method="post" action="/admin/users"><input type="hidden" name="csrf" value="{{csrf}}"><div class="form-row"><label class="field"><span>Namn</span><input name="name" required maxlength="120"></label><label class="field"><span>Användarnamn</span><input name="username" required minlength="3" maxlength="32" autocapitalize="none" autocomplete="username"><small>3–32 tecken: a–z, 0–9, punkt, bindestreck eller understreck.</small></label></div><label class="field"><span>Kontakt-e-post</span><input type="email" name="email" required maxlength="254"></label><div class="form-row"><label class="field"><span>Roll</span><select name="role" id="new-user-role"><option value="scout">Scout</option><option value="club">Klubb</option><option value="admin">Administratör</option></select></label><label class="field"><span>Klubb för klubbkonto</span><select name="club_id"><option value="">Välj klubb</option>{% for club in assignable_clubs %}<option value="{{club['id']}}">{{club['name']}}</option>{% endfor %}</select></label></div><label class="field"><span>Tillfälligt lösenord, minst {{min_password_length}} tecken</span><input type="password" name="password" minlength="{{min_password_length}}" required autocomplete="new-password"></label><label class="field"><span>Bekräfta lösenord</span><input type="password" name="confirm_password" minlength="{{min_password_length}}" required autocomplete="new-password"></label><button class="btn" type="submit">Skapa konto →</button></form></div></div>
+  <div class="card">
+    <h2 class="h2" style="margin-top:0">Skapa konto</h2>
+    <form method="post" action="/admin/users">
+      <input type="hidden" name="csrf" value="{{csrf}}">
+      <div class="form-row">
+        <label class="field"><span>Namn</span><input name="name" required maxlength="120"></label>
+        <label class="field"><span>Användarnamn</span><input name="username" required minlength="3" maxlength="32" autocapitalize="none" autocomplete="username"><small>3–32 tecken: a–z, 0–9, punkt, bindestreck eller understreck.</small></label>
+      </div>
+      <label class="field"><span>Kontakt-e-post</span><input type="email" name="email" required maxlength="254"></label>
+      <div class="form-row">
+        <label class="field"><span>Roll</span><select name="role" id="new-user-role"><option value="scout">Scout</option><option value="club">Klubb</option><option value="admin">Administratör</option></select></label>
+        <label class="field"><span>Klubb för klubbkonto</span><select name="club_id"><option value="">Välj klubb</option>{% for club in assignable_clubs %}<option value="{{club['id']}}">{{club['name']}}</option>{% endfor %}</select></label>
+      </div>
+      <label class="field"><span>Tillfälligt lösenord, minst {{min_password_length}} tecken</span><input type="password" name="password" minlength="{{min_password_length}}" required autocomplete="new-password"></label>
+      <label class="field"><span>Bekräfta lösenord</span><input type="password" name="confirm_password" minlength="{{min_password_length}}" required autocomplete="new-password"></label>
+      <button class="btn" type="submit">Skapa konto →</button>
+    </form>
+  </div>
+</div>
 
-<div class="panel-head" style="margin-top:38px"><h2 class="h2">Alla konton</h2></div><div class="list">{% for account in users %}<div class="card" id="user-{{account['id']}}"><div class="panel-head"><div><h3 class="h3" style="margin:0">{{account['name']}}</h3><div class="meta">@{{account['username']}} · Kontakt: {{account['email']}} · {{'Administratör' if account['role']=='admin' else ('Scout' if account['role']=='scout' else 'Klubb')}}{% if account['club_name'] %} · {{account['club_name']}}{% endif %}</div>{% if account['role']=='scout' %}<a class="btn outline small" style="margin-top:10px" href="/scouts/{{account['id']}}">Visa scoutprofil →</a>{% endif %}</div><span class="tag {{'approved' if account['active'] else 'changes_requested'}}">{{'Aktiv' if account['active'] else 'Avstängd'}}</span></div>
-<details class="report-section"><summary>Redigera konto</summary><div class="inner"><form method="post" action="/admin/users/{{account['id']}}/update"><input type="hidden" name="csrf" value="{{csrf}}"><div class="form-row"><label class="field"><span>Namn</span><input name="name" value="{{account['name']}}" required maxlength="120"></label><label class="field"><span>Användarnamn</span><input name="username" value="{{account['username']}}" required minlength="3" maxlength="32" autocapitalize="none" autocomplete="username"></label></div><label class="field"><span>Kontakt-e-post</span><input type="email" name="email" value="{{account['email']}}" required maxlength="254"></label><div class="form-row"><label class="field"><span>Roll</span><select name="role"><option value="scout" {% if account['role']=='scout' %}selected{% endif %}>Scout</option><option value="club" {% if account['role']=='club' %}selected{% endif %}>Klubb</option><option value="admin" {% if account['role']=='admin' %}selected{% endif %}>Administratör</option></select></label><label class="field"><span>Klubb för klubbkonto</span><select name="club_id"><option value="">Ingen klubb</option>{% for club in assignable_clubs %}<option value="{{club['id']}}" {% if account['club_id']==club['id'] %}selected{% endif %}>{{club['name']}}</option>{% endfor %}</select></label></div><p class="small muted">Klubbkopplingen styr vilket klubbmaterial kontot kan se. Ändringar avslutar kontots andra inloggade sessioner.</p><button class="btn small" type="submit">Spara konto</button></form></div></details>
-<details class="report-section"><summary>Återställ lösenord</summary><div class="inner"><form method="post" action="/admin/users/{{account['id']}}/password"><input type="hidden" name="csrf" value="{{csrf}}"><div class="form-row"><label class="field"><span>Nytt tillfälligt lösenord</span><input type="password" name="password" minlength="{{min_password_length}}" required autocomplete="new-password"></label><label class="field"><span>Bekräfta lösenord</span><input type="password" name="confirm_password" minlength="{{min_password_length}}" required autocomplete="new-password"></label></div><button class="btn small outline" type="submit">Återställ lösenord</button></form></div></details>
-<form method="post" action="/admin/users/{{account['id']}}/status" style="margin-top:14px"><input type="hidden" name="csrf" value="{{csrf}}"><input type="hidden" name="action" value="{{'deactivate' if account['active'] else 'activate'}}"><button class="btn small {{'outline' if account['active'] else ''}}" type="submit">{{'Stäng av konto' if account['active'] else 'Aktivera konto'}}</button></form></div>{% endfor %}</div>
+<div class="panel-head" style="margin-top:38px"><h2 class="h2">Alla personliga konton</h2></div>
+<p class="small muted">Klicka på en person för att visa kontaktuppgifter och kontoåtgärder.</p>
+<div class="entity-list account-list">
+  {% for account in users %}
+  <details class="entity-card" id="user-{{account['id']}}">
+    <summary>
+      <span class="entity-summary-main"><strong>{{account['name']}}</strong><span>@{{account['username']}} · {{'Administratör' if account['role']=='admin' else ('Scout' if account['role']=='scout' else 'Klubb')}}{% if account['club_name'] %} · {{account['club_name']}}{% endif %}</span></span>
+      <span class="tag {{'approved' if account['active'] else 'changes_requested'}}">{{'Aktiv' if account['active'] else 'Avstängd'}}</span>
+    </summary>
+    <div class="entity-body">
+      <div class="meta account-contact">Kontakt: {{account['email']}} · Användarnamn: @{{account['username']}}</div>
+      {% if account['role']=='scout' %}<a class="btn outline small" href="/scouts/{{account['id']}}">Visa scoutprofil →</a>{% endif %}
+
+      <details class="report-section">
+        <summary>Redigera konto</summary>
+        <div class="inner"><form method="post" action="/admin/users/{{account['id']}}/update">
+          <input type="hidden" name="csrf" value="{{csrf}}">
+          <div class="form-row">
+            <label class="field"><span>Namn</span><input name="name" value="{{account['name']}}" required maxlength="120"></label>
+            <label class="field"><span>Användarnamn</span><input name="username" value="{{account['username']}}" required minlength="3" maxlength="32" autocapitalize="none" autocomplete="username"></label>
+          </div>
+          <label class="field"><span>Kontakt-e-post</span><input type="email" name="email" value="{{account['email']}}" required maxlength="254"></label>
+          <div class="form-row">
+            <label class="field"><span>Roll</span><select name="role"><option value="scout" {% if account['role']=='scout' %}selected{% endif %}>Scout</option><option value="club" {% if account['role']=='club' %}selected{% endif %}>Klubb</option><option value="admin" {% if account['role']=='admin' %}selected{% endif %}>Administratör</option></select></label>
+            <label class="field"><span>Klubb för klubbkonto</span><select name="club_id"><option value="">Ingen klubb</option>{% for club in assignable_clubs %}<option value="{{club['id']}}" {% if account['club_id']==club['id'] %}selected{% endif %}>{{club['name']}}</option>{% endfor %}</select></label>
+          </div>
+          <p class="small muted">Klubbkopplingen styr vilket klubbmaterial kontot kan se. Ändringar avslutar kontots andra inloggade sessioner.</p>
+          <button class="btn small" type="submit">Spara konto</button>
+        </form></div>
+      </details>
+      <details class="report-section">
+        <summary>Återställ lösenord</summary>
+        <div class="inner"><form method="post" action="/admin/users/{{account['id']}}/password">
+          <input type="hidden" name="csrf" value="{{csrf}}">
+          <div class="form-row">
+            <label class="field"><span>Nytt tillfälligt lösenord</span><input type="password" name="password" minlength="{{min_password_length}}" required autocomplete="new-password"></label>
+            <label class="field"><span>Bekräfta lösenord</span><input type="password" name="confirm_password" minlength="{{min_password_length}}" required autocomplete="new-password"></label>
+          </div>
+          <button class="btn small outline" type="submit">Återställ lösenord</button>
+        </form></div>
+      </details>
+      <form method="post" action="/admin/users/{{account['id']}}/status" style="margin-top:14px">
+        <input type="hidden" name="csrf" value="{{csrf}}"><input type="hidden" name="action" value="{{'deactivate' if account['active'] else 'activate'}}">
+        <button class="btn small {{'outline' if account['active'] else ''}}" type="submit">{{'Stäng av konto' if account['active'] else 'Aktivera konto'}}</button>
+      </form>
+    </div>
+  </details>
+  {% endfor %}
+</div>
 {% endblock %}

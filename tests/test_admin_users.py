@@ -61,6 +61,9 @@ def test_admin_can_manage_accounts_and_sessions(monkeypatch, tmp_path):
         users_page = admin.get("/admin/users")
         assert users_page.status_code == 200
         assert "KLUBBAR & KONTON" in users_page.text
+        assert "Alla personliga konton" in users_page.text
+        assert 'class="entity-card"' in users_page.text
+        assert 'class="entity-card" open' not in users_page.text
         assert 'minlength="6"' in users_page.text
 
         response = admin_post(admin, "/admin/clubs", {"name": "Pilot IF"})
@@ -259,8 +262,10 @@ def test_admin_edits_clubs_and_linked_account_data_safely(monkeypatch, tmp_path)
 
             page = admin.get("/admin/users")
             assert "Pilot FK" in page.text
-            assert "1 aktiva av 1 konton · 1 uppdrag" in page.text
+            assert "1 aktiva av 1 kopplade konton · 1 uppdrag" in page.text
             assert "Ny klubbansvarig" in page.text
+            assert f'<details class="entity-card" id="club-{pilot_id}">' in page.text
+            assert f'<details class="entity-card" id="user-{club_user_id}">' in page.text
 
             assert admin_post(admin, f"/admin/clubs/{pilot_id}/update", {"name": "andra if"}).status_code == 303
             assert admin_post(admin, f"/admin/clubs/{academy_id}/update", {"name": "Nytt Academy-namn"}).status_code == 303
