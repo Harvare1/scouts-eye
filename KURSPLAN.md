@@ -1,49 +1,45 @@
 # Andrablicken Scout Academy – kursstruktur (arbetsförslag)
 
-**Status:** Grundkursens sex lektioner, tiufrågorstest, rapportbaserade examination, manuella bedömningsmatris och verifierbara kursintyg är implementerade som ett kvalitetssäkringsutkast i pilotportalen. Fördjupningskurserna finns som låsta kurs- och modulutkast. Inga kurser är färdigproducerade eller öppna för försäljning.
+**Status:** Grundkursens sex lektioner, tiufrågorstest, rapportbaserade examination, manuella bedömningsmatris och verifierbara kursintyg är implementerade i pilotportalen. Fördjupningskurserna finns som stängda kursplaner och är inte öppna för försäljning.
 
 ## Kurs 1 – Introduktion till scouting
 
-**Målgrupp:** Fotbollsintresserade utan tidigare scoutuppdrag. **Förväntad studietid:** cirka 4–6 timmar.
+**Målgrupp:** Fotbollsintresserade utan tidigare scoutuppdrag. **Förväntad studietid:** cirka 2–3 timmar.
 
 | Lektion | Innehåll | Praktik | Kontroll |
 |---|---|---|---|
-| 1. Vad gör en scout? | Uppdragsgivare, roll, metod, etik | Beskriv klubbens beslut | Kort quiz |
-| 2. Observation utan bias | Skillnaden på observation, tolkning och rykte | 10 observationer med minuter | Träningsuppgift |
-| 3. Spelarens roller | Grundprinciper per position och system | Beskriv spelarrollen i två faser | Quiz |
-| 4. Spelarbedömning | Teknik, taktik, fysik, beslutsfattande | Skriv styrkor, risker och belägg | Bedömningsmatris |
-| 5. Rapportskrivning | Rapportmall, källhänvisning, säkerhet | Fyll i en spelarrapport | Kamrat-/lärarrespons |
-| 6. Slutuppgift | Ett helt seniormatchunderlag | Full rapport och 3 slutsatser | Manuell granskning |
+| 1. Scoutens roll inom fotbollen | Observation, tolkning och rekommendation | Frågor till sportchef | Kunskapsfråga |
+| 2. Förstå spelets olika faser | Anfall, försvar, omställningar och fasta situationer | Interaktiv formationsövning | Kunskapsfråga |
+| 3. Grundläggande spelaridentifiering | Teknik, taktik, fysik och observerbara beteenden | Fem konkreta spelarobservationer | Kunskapsfråga |
+| 4. Grundläggande motståndaranalys | Spelmönster, press, omställningar och sårbarheter | Jämför två matchsituationer | Kunskapsfråga |
+| 5. Dokumentation och scoutingrapporter | Tidsstämplar, belägg, slutsatser och osäkerhet | Tre observationer med taktisk konsekvens | Kunskapsfråga |
+| 6. Professionalism, etik och kvalitet | Sekretess, intressekonflikter och minderåriga | Tre etiska situationer | Kunskapsfråga |
 
 **Villkor för godkänt:** 80 % på kunskapstest och en godkänd praktisk rapport. Ett kursintyg ska beskriva genomförd utbildning, inte officiell förbundslicens eller garanterat scoutuppdrag.
 
 ## Kurs 2 – Spelaridentifiering och rekrytering
 
-**Målgrupp:** Personer som gått grundkursen eller visat motsvarande kunskap. **Studietid:** cirka 8–12 timmar.
+**Målgrupp:** Personer som gått grundkursen eller visat motsvarande kunskap. **Studietid:** cirka 5–7 timmar.
 
 1. Rekryteringsprofil och klubbens spelidé.
 2. Rollspecifika kravprofiler och observerbara egenskaper.
 3. Matchkontext, speltid och motståndets nivå.
 4. Spelarbedömning med bevis och tidsstämplar.
 5. Prognos och risk: vad går och går inte att dra slutsatser om?
-6. Jämförelse mellan två matcher för samma spelare.
-7. Professionellt beslutsunderlag till sportchef.
-8. Slutuppgift: två observationer, en rapport, muntlig återkoppling.
+6. Examination: tre matcher med samma spelare och en komplett rekryteringsrapport.
 
 **Examensunderlag:** En fullständig flersidig spelarrapport med konkreta observationer och en tydlig rekommendation.
 
 ## Kurs 3 – Match- och motståndaranalys
 
-**Målgrupp:** Tränare, analytiker och scouter. **Studietid:** cirka 10–15 timmar.
+**Målgrupp:** Tränare, analytiker och scouter. **Studietid:** cirka 5–7 timmar.
 
 1. Uppdraget: vad behöver tränaren inför nästa match?
 2. Formationer, utgångspositioner och rollskiften.
 3. Uppbyggnad och anfallsprinciper.
 4. Försvarsblock, presshöjd, pressignaler och återerövring.
 5. Omställningar och matchens perioder.
-6. Fasta situationer och repetition av mönster.
-7. Redovisning med taktiktavla, tidsstämplar och videohänvisningar.
-8. Slutuppgift: en motståndarrapport och fem prioriterade matchplanpunkter.
+6. Examination: två matcher med samma lag och en motståndarrapport med taktiska rekommendationer.
 
 **Examensunderlag:** Den flersidiga motståndarrapporten, två analyserade matcher och en konkret matchplan.
 
@@ -65,7 +61,7 @@
 | Begränsningar, etik och osäkerhet | 10 |
 | Professionell rapportstruktur och tydliga rekommendationer | 20 |
 
-Föreslaget godkänt: minst 75/100 och **inga kritiska brister** i källhantering, fabricerade observationer eller hantering av skyddsvärt material. Granskare återkopplar skriftligt och kan begära komplettering.
+Godkänt kräver minst 70/100 och **inga kritiska brister** i källhantering, fabricerade observationer eller hantering av skyddsvärt material. Granskare återkopplar skriftligt och kan begära komplettering.
 
 ## Produktion och juridik
 

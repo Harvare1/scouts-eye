@@ -47,6 +47,16 @@ if PRODUCTION:
 app.add_middleware(SessionMiddleware,secret_key=SECRET,https_only=PRODUCTION,same_site='lax',session_cookie='andrablicken_session',max_age=60*60*8)
 app.mount('/static',StaticFiles(directory=ROOT/'static'),name='static')
 tmpl=Jinja2Templates(directory=str(ROOT/'templates'))
+ACADEMY_STATUS_LABELS={
+    'draft':'Påbörjad',
+    'in_progress':'Pågår',
+    'quiz_passed':'Kunskapstest godkänt',
+    'submitted':'Inskickad för granskning',
+    'changes_requested':'Komplettering behövs',
+    'passed':'Godkänd',
+    'failed':'Underkänd',
+}
+tmpl.env.filters['academy_status']=lambda value:ACADEMY_STATUS_LABELS.get(str(value),str(value).replace('_',' ').capitalize())
 
 @app.middleware('http')
 async def security_headers(request,call_next):
@@ -820,7 +830,7 @@ async def academy_enroll(request:Request,course_id:int,csrf:str=Form(...)):
         now=datetime.now().isoformat(timespec='minutes')
         con.execute("INSERT OR IGNORE INTO academy_enrollments(course_id,user_id,status,enrolled_at) VALUES (?,?,'in_progress',?)",(course_id,u['id'],now))
         enrollment=_academy_enrollment(con,course_id,u['id']);academy_audit(con,u['id'],'enrolled','academy_enrollment',enrollment['id'],{'course_id':course_id})
-    notice(request,'Du är registrerad på grundkursens kvalitetssäkringsutkast.')
+    notice(request,'Du är registrerad på den kostnadsfria grundkursen.')
     return go(f'/courses/{course["slug"]}')
 
 @app.get('/courses/lessons/{lesson_id}',response_class=HTMLResponse)

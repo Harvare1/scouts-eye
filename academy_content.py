@@ -172,8 +172,12 @@ DRAFT_COURSES = [
         "summary": "Fördjupning i flermatchobservation, positionsprofiler och rekryteringsrekommendationer.",
         "level": "Fördjupning", "access_type": "paid", "price_ore": 149500, "estimated_minutes": 420, "study_time_label": "5–7 timmar", "status": "draft",
         "modules": [
-            "Rekryteringsprocessen", "Positionsspecifik scouting", "Observation över flera matcher",
-            "Teknisk, taktisk, fysisk och beteendemässig bedömning", "Rekryteringsrapport", "Examination",
+            {"title": "Rekryteringsprocessen", "summary": "Hur klubbens spelidé, behov och ekonomiska förutsättningar formar en användbar spelarprofil."},
+            {"title": "Positionsspecifik scouting", "summary": "Rollkrav och skillnader mellan exempelvis bollvinnande och spelfördelande mittfältare, ytterbackar och forwards."},
+            {"title": "Observation över flera matcher", "summary": "Att identifiera återkommande egenskaper och väga in motstånd, speltid och matchkontext."},
+            {"title": "Teknisk, taktisk, fysisk och beteendemässig bedömning", "summary": "En strukturerad bedömning av observerbara egenskaper, beteenden och begränsningar."},
+            {"title": "Rekryteringsrapport", "summary": "Från konkreta observationer till styrkor, risker, möjlig roll och tydlig rekommendation."},
+            {"title": "Examination", "summary": "Scouta en spelare över tre matcher och lämna ett komplett rekryteringsunderlag för manuell bedömning."},
         ],
     },
     {
@@ -181,8 +185,12 @@ DRAFT_COURSES = [
         "summary": "Fördjupning i spelorganisation, press, omställningar, fasta situationer och professionella motståndarrapporter.",
         "level": "Fördjupning", "access_type": "paid", "price_ore": 149500, "estimated_minutes": 420, "study_time_label": "5–7 timmar", "status": "draft",
         "modules": [
-            "Analysuppdraget", "Formationer och spelorganisation", "Försvarsspel",
-            "Omställningar och fasta situationer", "Från observation till matchplan", "Examination",
+            {"title": "Analysuppdraget", "summary": "Avgränsa vad tränarstaben behöver veta och prioritera information som påverkar matchförberedelserna."},
+            {"title": "Formationer och spelorganisation", "summary": "Analysera uppbyggnad, spelvändningar, positionsförändringar och överbelastningar i olika spelfaser."},
+            {"title": "Försvarsspel", "summary": "Identifiera pressystem, blockhöjd, markering och försvar av centrala och breda ytor."},
+            {"title": "Omställningar och fasta situationer", "summary": "Hitta återkommande mönster efter bollvinst, bolltapp och vid fasta situationer."},
+            {"title": "Från observation till matchplan", "summary": "Omsätt belagda mönster till konkreta prioriteringar och taktiska rekommendationer."},
+            {"title": "Examination", "summary": "Analysera två matcher med samma lag och lämna en professionell motståndarrapport för manuell bedömning."},
         ],
     },
 ]

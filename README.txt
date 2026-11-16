@@ -44,9 +44,12 @@ Den delar INTE automatiskt behörigheter hos Veo, Hudl eller andra tjänster.
 Den lagrar INGA videofiler. Klubben måste ordna laglig åtkomst.
 
 UTBILDNING
-Scout Academy har tre korta lektioner, en praktisk övningsbeskrivning
-för varje lektion och ett femfrågors kunskapstest. Detta är endast en pilot.
-Det finns inga betalningar, köpta kurser eller officiella certifikat.
+Andrablicken Academy har en kostnadsfri grundkurs med sex lektioner,
+reflektionsövningar, ett serverrättat tiufrågorstest och en praktisk
+rapportexamination som granskas manuellt. Godkända deltagare får ett
+verifierbart Andrablicken-intyg; intyget är inte en förbundslicens och
+garanterar inte klubbuppdrag. Två betalda fördjupningskurser finns som
+stängda kursplaner och öppnas först efter kvalitetssäkring.
 
 SÄKERHET / INFÖR PUBLICERING
 DEN HÄR DEMON FÅR INTE SÄTTAS PÅ INTERNET I NUVARANDE FORM.
