@@ -137,8 +137,11 @@ jobs:
             sleep 2
           done
 
-          curl --fail --silent --show-error http://127.0.0.1:8091/ \
-            | grep --quiet 'ANDRABLICKEN'
+          landing_check=/tmp/andrablicken-landing-check.html
+          curl --fail --silent --show-error \
+            --output "$landing_check" http://127.0.0.1:8091/
+          grep --quiet 'ANDRABLICKEN' "$landing_check"
+          rm -f "$landing_check"
           ufw allow from 103.177.249.207 to any port 8091 proto tcp \
             comment 'Andrablicken via Proxy-LB' >/dev/null
           docker compose --project-name andrablicken --file "$compose_file" ps
@@ -218,8 +221,11 @@ jobs:
             --retry 12 --retry-delay 5 --retry-all-errors \
             https://scouts-eye.knegare.eu/health \
             | python3 -c 'import json,sys; assert json.load(sys.stdin)=={"status":"ok","mode":"production"}'
-          curl --fail --show-error --silent https://scouts-eye.knegare.eu/ \
-            | grep --quiet 'ANDRABLICKEN'
+          public_check=/tmp/andrablicken-public-check.html
+          curl --fail --show-error --silent \
+            --output "$public_check" https://scouts-eye.knegare.eu/
+          grep --quiet 'ANDRABLICKEN' "$public_check"
+          rm -f "$public_check"
 
   retire-old-app:
     name: Retire old Scout's Eye containers
