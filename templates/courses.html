@@ -1,15 +1,15 @@
 {% extends 'base.html' %}{% block title %}Andrablicken Academy{% endblock %}{% block content %}
 <div class="eyebrow">Andrablicken / Academy</div><h1 class="title">KUNSKAP SOM<br>ANVÄNDS.</h1>
-<p class="subtitle">Praktiska svenska scoutingutbildningar för senior-, akademi- och breddfotboll. Samtliga kurser är kvalitetssäkringsutkast. Genomförd utbildning är alltid separat från behörigheten att utföra riktiga klubbuppdrag.</p>
+<p class="subtitle">Praktiska svenska scoutingutbildningar för senior-, akademi- och breddfotboll. Börja med den kostnadsfria grundkursen eller utforska kommande fördjupningar. Genomförd utbildning är alltid separat från behörigheten att utföra riktiga klubbuppdrag.</p>
 {% if user['role']=='admin' %}<div class="buttons"><a class="btn" href="/admin/academy">Administrera Academy →</a><a class="btn outline" href="/admin/academy/examinations">Examinationskö</a></div>{% endif %}
 <div class="academy-catalog">
 {% for course in courses %}
   <article class="card academy-course-card">
-    <div class="panel-head"><span class="eyebrow">Kurs {{loop.index}} · {{course['level']}}</span><span class="tag draft">Utkast</span></div>
+    <div class="panel-head"><span class="eyebrow">Kurs {{loop.index}} · {{course['level']}}</span><span class="tag {{'open' if course['slug']=='introduktion-fotbollsscouting' else 'upcoming'}}">{{'Öppen för anmälan' if course['slug']=='introduktion-fotbollsscouting' else 'Kommer snart'}}</span></div>
     <h2 class="h2">{{course['title']|upper}}</h2><p class="muted">{{course['summary']}}</p>
-    <div class="academy-facts"><span>{{course['study_time_label'] or ((course['estimated_minutes']+59)//60 ~ ' timmar')}}</span><span>{% if course['lesson_count'] %}{{course['lesson_count']}} lektioner{% else %}{{course['module_count']}} planerade moduler{% endif %}</span><span>{% if course['access_type']=='free' %}Gratis{% else %}Planerat pris: {{'%.0f'|format(course['price_ore']/100)}} kr{% endif %}</span></div>
-    {% if course['enrollment_id'] %}<div class="progress"><b style="width:{{((course['completed_lessons'] or 0) / (course['lesson_count'] or 1) * 100)|round|int}}%"></b></div><p class="small">{{course['completed_lessons'] or 0}} av {{course['lesson_count']}} genomförda · Status: {{course['enrollment_status']}}</p>{% endif %}
-    <a class="btn {{'' if course['slug']=='introduktion-fotbollsscouting' else 'outline'}}" href="/courses/{{course['slug']}}">{{'Fortsätt kursen' if course['enrollment_id'] else ('Öppna grundkursen' if course['slug']=='introduktion-fotbollsscouting' else 'Visa kursutkast')}} →</a>
+    <div class="academy-facts"><span>{{course['study_time_label'] or ((course['estimated_minutes']+59)//60 ~ ' timmar')}}</span><span>{% if course['lesson_count'] %}{{course['lesson_count']}} lektioner{% else %}{{course['module_count']}} moduler{% endif %}</span><span>{% if course['access_type']=='free' %}Gratis{% else %}Pris meddelas vid kursstart{% endif %}</span></div>
+    {% if course['enrollment_id'] %}<div class="progress"><b style="width:{{((course['completed_lessons'] or 0) / (course['lesson_count'] or 1) * 100)|round|int}}%"></b></div><p class="small">{{course['completed_lessons'] or 0}} av {{course['lesson_count']}} lektioner genomförda · {{course['enrollment_status']|academy_status}}</p>{% endif %}
+    <a class="btn {{'' if course['slug']=='introduktion-fotbollsscouting' else 'outline'}}" href="/courses/{{course['slug']}}">{{'Fortsätt kursen' if course['enrollment_id'] else ('Starta gratis' if course['slug']=='introduktion-fotbollsscouting' else 'Läs om kursen')}} →</a>
   </article>
 {% endfor %}
 </div>

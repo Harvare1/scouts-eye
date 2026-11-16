@@ -118,9 +118,13 @@ def _seed_courses(con):
             course_id,position,question,json.dumps(choices,ensure_ascii=False),correct,explanation))
     for draft in DRAFT_COURSES:
         draft_id=_insert_course(con,draft)
-        for position,title in enumerate(draft['modules'],start=1):
+        for position,module in enumerate(draft['modules'],start=1):
+            title=module['title'];summary=module['summary']
             con.execute('''INSERT OR IGNORE INTO academy_modules(course_id,position,title,summary,status)
-                VALUES (?,?,?,?,?)''',(draft_id,position,title,'Planerat originalinnehåll ska utvecklas och kvalitetssäkras före publicering.','draft'))
+                VALUES (?,?,?,?,?)''',(draft_id,position,title,summary,'draft'))
+            con.execute('''UPDATE academy_modules SET summary=? WHERE course_id=? AND position=?
+                AND summary='Planerat originalinnehåll ska utvecklas och kvalitetssäkras före publicering.' ''',
+                (summary,draft_id,position))
 
 
 def _migrate_legacy_progress(con):

@@ -70,8 +70,15 @@ def test_academy_seeds_six_lesson_draft_and_locked_advanced_courses(monkeypatch,
         catalog = scout.get("/courses")
         assert "INTRODUKTION TILL FOTBOLLSSCOUTING" in catalog.text
         assert "SPELARIDENTIFIERING OCH REKRYTERING" in catalog.text
+        assert "Öppen för anmälan" in catalog.text
+        assert "Kommer snart" in catalog.text
+        assert "Så ska den betalda kursen se ut senare" not in catalog.text
+        assert "kvalitetssäkringsutkast" not in catalog.text.lower()
+        assert "Status: in_progress" not in catalog.text
         advanced = scout.get("/courses/spelaridentifiering-rekrytering")
-        assert "inte köpbar eller öppen" in advanced.text
+        assert "Kursen öppnar längre fram" in advanced.text
+        assert "Hur klubbens spelidé, behov och ekonomiska förutsättningar" in advanced.text
+        assert "Planerat originalinnehåll" not in advanced.text
         response = scout.post(
             f"/courses/{courses[1]['id']}/enroll",
             data={"csrf": csrf_from(advanced)},
