@@ -202,3 +202,92 @@ def test_admin_can_manage_accounts_and_sessions(monkeypatch, tmp_path):
         assert response.status_code == 303
         with module.db() as connection:
             assert connection.execute("SELECT active FROM users WHERE id=?", (admin_id,)).fetchone()["active"] == 1
+
+
+def test_admin_edits_clubs_and_linked_account_data_safely(monkeypatch, tmp_path):
+    module = load_application(monkeypatch, tmp_path)
+    with TestClient(module.app, base_url="https://testserver") as admin:
+        assert login(admin, "admin", ADMIN_PASSWORD).status_code == 303
+        assert admin_post(admin, "/admin/clubs", {"name": "Pilot IF"}).status_code == 303
+        assert admin_post(admin, "/admin/clubs", {"name": "Andra IF"}).status_code == 303
+
+        with module.db() as connection:
+            pilot_id = connection.execute("SELECT id FROM clubs WHERE name='Pilot IF'").fetchone()["id"]
+            other_id = connection.execute("SELECT id FROM clubs WHERE name='Andra IF'").fetchone()["id"]
+            connection.execute("INSERT INTO clubs(name) VALUES ('Andrablicken Academy')")
+            academy_id = connection.execute("SELECT id FROM clubs WHERE name='Andrablicken Academy'").fetchone()["id"]
+            connection.execute(
+                "INSERT INTO users(name,username,email,password_hash,role,club_id) VALUES (?,?,?,?,?,?)",
+                ("Klubbansvarig", "klubbansvarig", "klubb@example.test", module.password_hash(SCOUT_PASSWORD), "club", pilot_id),
+            )
+            club_user_id = connection.execute("SELECT last_insert_rowid() AS id").fetchone()["id"]
+            connection.execute(
+                "INSERT INTO assignments(club_id,title,fixture,created_at) VALUES (?,?,?,?)",
+                (pilot_id, "Pilotuppdrag", "Pilot IF – Exempel FF", "2026-11-16T12:00"),
+            )
+            assignment_id = connection.execute("SELECT last_insert_rowid() AS id").fetchone()["id"]
+
+        with TestClient(module.app, base_url="https://testserver") as club_client:
+            assert login(club_client, "klubbansvarig", SCOUT_PASSWORD).status_code == 303
+
+            response = admin_post(
+                admin,
+                f"/admin/users/{club_user_id}/update",
+                {
+                    "name": "Ny klubbansvarig",
+                    "username": "ny-klubbansvarig",
+                    "email": "ny.klubb@example.test",
+                    "role": "club",
+                    "club_id": str(pilot_id),
+                },
+            )
+            assert response.status_code == 303
+            assert club_client.get("/app").status_code == 401
+
+            with module.db() as connection:
+                account = connection.execute("SELECT * FROM users WHERE id=?", (club_user_id,)).fetchone()
+                assert account["name"] == "Ny klubbansvarig"
+                assert account["username"] == "ny-klubbansvarig"
+                assert account["email"] == "ny.klubb@example.test"
+                assert account["club_id"] == pilot_id
+
+            assert admin_post(admin, f"/admin/clubs/{pilot_id}/update", {"name": "Pilot FK"}).status_code == 303
+            with module.db() as connection:
+                assert connection.execute("SELECT name FROM clubs WHERE id=?", (pilot_id,)).fetchone()["name"] == "Pilot FK"
+                assert connection.execute("SELECT club_id FROM users WHERE id=?", (club_user_id,)).fetchone()["club_id"] == pilot_id
+                assert connection.execute("SELECT club_id FROM assignments WHERE id=?", (assignment_id,)).fetchone()["club_id"] == pilot_id
+
+            page = admin.get("/admin/users")
+            assert "Pilot FK" in page.text
+            assert "1 aktiva av 1 konton · 1 uppdrag" in page.text
+            assert "Ny klubbansvarig" in page.text
+
+            assert admin_post(admin, f"/admin/clubs/{pilot_id}/update", {"name": "andra if"}).status_code == 303
+            assert admin_post(admin, f"/admin/clubs/{academy_id}/update", {"name": "Nytt Academy-namn"}).status_code == 303
+            with module.db() as connection:
+                assert connection.execute("SELECT name FROM clubs WHERE id=?", (pilot_id,)).fetchone()["name"] == "Pilot FK"
+                assert connection.execute("SELECT name FROM clubs WHERE id=?", (academy_id,)).fetchone()["name"] == "Andrablicken Academy"
+
+            crafted = admin_post(
+                admin,
+                f"/admin/users/{club_user_id}/update",
+                {
+                    "name": "Ny klubbansvarig",
+                    "username": "ny-klubbansvarig",
+                    "email": "ny.klubb@example.test",
+                    "role": "club",
+                    "club_id": str(academy_id),
+                },
+            )
+            assert crafted.status_code == 303
+            with module.db() as connection:
+                assert connection.execute("SELECT club_id FROM users WHERE id=?", (club_user_id,)).fetchone()["club_id"] == pilot_id
+
+            assert login(club_client, "ny-klubbansvarig", SCOUT_PASSWORD).status_code == 303
+            account_page = club_client.get("/account")
+            forbidden = club_client.post(
+                f"/admin/clubs/{other_id}/update",
+                data={"name": "Otillåtet namn", "csrf": csrf_from(account_page)},
+                follow_redirects=False,
+            )
+            assert forbidden.status_code == 403
