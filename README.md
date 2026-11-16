@@ -66,6 +66,10 @@ Praktisk examination skapar en separat Academy-rapport i den befintliga rapporte
 
 Kurser, moduler och lektioner hanteras under `/admin/academy`; examinationskön finns under `/admin/academy/examinations`. Kurskatalog och kursdata lagras i `academy_*`-tabeller. Fördjupningskurserna **Spelaridentifiering och rekrytering** och **Motståndaranalys och taktisk scouting** finns som betalda, låsta utkast och är inte köpbara. Samtliga tre kurser har status `draft` tills innehållet har kvalitetssäkrats.
 
+Deltagaren får en återuppta-länk till nästa ofärdiga lektion och ser senaste aktivitet. Kommande fördjupningskurser har en unik, databaslagrad intresseanmälan per användare. Academy-examinationer valideras på serversidan före inlämning: fem olika tidsstämplar, två styrkor, två begränsningar, konkret rekommendation och redovisad osäkerhet krävs.
+
+Adminpanelen visar en automatisk publiceringschecklista och blockerar publicering om moduler, lektioner, kunskapsfrågor, test eller pris saknas. Varje sparning av en lektion skapar en spårbar version som kan återställas utan att historik raderas. Academy-vyerna har hopp-länk, tydliga fokusmarkeringar, ARIA-progress och stöd för reducerad rörelse.
+
 ## Scoutprofiler och fotbolls-CV
 
 Scouter hanterar sin profil via **Scoutprofil** i huvudmenyn. Profilen innehåller fotbollsbakgrund, erfarenhet, egna meriter, kompetenser, språk, tillgänglighet och ett valfritt PDF-CV på högst 8 MB. Hela profilen kan exporteras som en separat Andrablicken-PDF.

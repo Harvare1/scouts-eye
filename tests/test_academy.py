@@ -159,7 +159,7 @@ def test_full_academy_progress_quiz_examination_and_certificate(monkeypatch, tmp
         assert exam_start.status_code == 303
         report_id = int(exam_start.headers["location"].split("/reports/", 1)[1].split("/", 1)[0])
         editor = scout.get(exam_start.headers["location"])
-        submit = scout.post(
+        blocked = scout.post(
             f"/reports/{report_id}/save",
             data={
                 "csrf": csrf_from(editor),
@@ -172,6 +172,24 @@ def test_full_academy_progress_quiz_examination_and_certificate(monkeypatch, tmp
                 "tactics": "{}",
                 "action": "submit",
             },
+            follow_redirects=False,
+        )
+        assert blocked.status_code == 303
+        blocked_editor = scout.get(blocked.headers["location"])
+        assert "minst två styrkor" in blocked_editor.text.lower()
+        valid_exam_data = {
+            "game_context": "12:40 – konkret matchobservation.",
+            "observations": "12:40 – press.\n25:10 – uppspel.\n38:20 – omställning.\n55:00 – fast situation.\n71:30 – lågt block.",
+            "strengths": "1. Hög press med korta avstånd.\n2. Hotar ytan bakom ytterbacken.",
+            "weaknesses": "1. Lämnar yta bakom högerbacken.\n2. Svagt skydd vid defensiv omställning.",
+            "recommendation": "Spela snabbt bakom högerbacken efter bollvinst.",
+            "limitations": "Analysen bygger på en match och behöver bekräftas med ytterligare observationer.",
+            "tactics": "{}",
+            "action": "submit",
+        }
+        submit = scout.post(
+            f"/reports/{report_id}/save",
+            data={"csrf": csrf_from(blocked_editor), **valid_exam_data},
             follow_redirects=False,
         )
         assert submit.status_code == 303
@@ -222,13 +240,7 @@ def test_full_academy_progress_quiz_examination_and_certificate(monkeypatch, tmp
         assert editor.status_code == 200
         resubmit = scout.post(
             f"/reports/{report_id}/save",
-            data={
-                "csrf": csrf_from(editor),
-                "recommendation": "Kompletterad rekommendation.",
-                "summary": "Kompletterad slutsats.",
-                "tactics": "{}",
-                "action": "submit",
-            },
+            data={"csrf": csrf_from(editor), **valid_exam_data, "recommendation": "Kompletterad konkret rekommendation med tydlig matchplan.", "summary": "Kompletterad slutsats."},
             follow_redirects=False,
         )
         assert resubmit.status_code == 303
@@ -295,3 +307,112 @@ def test_academy_admin_api_and_permissions(monkeypatch, tmp_path):
         assert response.json()["status"] == "draft"
         catalog = admin.get("/api/academy/courses")
         assert any(course["slug"] == "nytt-utkast" for course in catalog.json()["courses"])
+
+
+def test_academy_resume_interest_and_accessibility(monkeypatch, tmp_path):
+    module = load_application(monkeypatch, tmp_path)
+    with module.db() as connection:
+        intro = connection.execute("SELECT id FROM academy_courses WHERE slug='introduktion-fotbollsscouting'").fetchone()
+        advanced = connection.execute("SELECT id FROM academy_courses WHERE slug='spelaridentifiering-rekrytering'").fetchone()
+        lessons = connection.execute(
+            "SELECT l.id,q.correct_index FROM academy_lessons l JOIN academy_modules m ON m.id=l.module_id JOIN academy_lesson_questions q ON q.lesson_id=l.id WHERE m.course_id=? ORDER BY m.position,l.position",
+            (intro["id"],),
+        ).fetchall()
+
+    with TestClient(module.app, base_url="http://testserver") as scout:
+        login(scout, "scout")
+        catalog = scout.get("/courses")
+        assert 'class="skip-link"' in catalog.text
+        assert 'id="main-content"' in catalog.text
+        assert 'aria-label="Huvudmeny"' in catalog.text
+        scout.post(
+            f"/courses/{intro['id']}/enroll",
+            data={"csrf": csrf_from(catalog)},
+            follow_redirects=False,
+        )
+        detail = scout.get("/courses/introduktion-fotbollsscouting")
+        saved = scout.post(
+            f"/api/academy/lessons/{lessons[0]['id']}/progress",
+            headers={"X-CSRF-Token": csrf_from(detail)},
+            json={"reflection": "Ett tillräckligt långt reflektionssvar.", "answer_index": lessons[0]["correct_index"]},
+        )
+        assert saved.json()["completed"] is True
+        catalog = scout.get("/courses")
+        assert f'/courses/lessons/{lessons[1]["id"]}' in catalog.text
+        assert "Fortsätt där du slutade" in catalog.text
+        assert 'role="progressbar"' in catalog.text
+
+        advanced_page = scout.get("/courses/spelaridentifiering-rekrytering")
+        interested = scout.post(
+            f"/courses/{advanced['id']}/interest",
+            data={"csrf": csrf_from(advanced_page)},
+            follow_redirects=False,
+        )
+        assert interested.status_code == 303
+        duplicate_page = scout.get(interested.headers["location"])
+        assert "Du står på intresselistan" in duplicate_page.text
+        duplicate = scout.post(
+            f"/courses/{advanced['id']}/interest",
+            data={"csrf": csrf_from(duplicate_page)},
+            follow_redirects=False,
+        )
+        assert duplicate.status_code == 303
+
+    with module.db() as connection:
+        assert connection.execute("SELECT COUNT(*) AS c FROM academy_course_interest WHERE course_id=?",(advanced["id"],)).fetchone()["c"] == 1
+
+
+def test_academy_publish_guard_and_lesson_versions(monkeypatch, tmp_path):
+    module = load_application(monkeypatch, tmp_path)
+    with module.db() as connection:
+        advanced_id = connection.execute("SELECT id FROM academy_courses WHERE slug='spelaridentifiering-rekrytering'").fetchone()["id"]
+        lesson = connection.execute("SELECT * FROM academy_lessons ORDER BY id LIMIT 1").fetchone()
+        question = connection.execute("SELECT * FROM academy_lesson_questions WHERE lesson_id=?",(lesson["id"],)).fetchone()
+        choices = json.loads(question["choices_json"])
+
+    with TestClient(module.app, base_url="http://testserver") as admin:
+        login(admin, "admin")
+        admin_page = admin.get("/admin/academy")
+        assert "Publiceringskontroll" in admin_page.text
+        assert "punkter kvar" in admin_page.text
+        blocked = admin.patch(
+            f"/api/admin/academy/courses/{advanced_id}",
+            headers={"X-CSRF-Token": csrf_from(admin_page)},
+            json={"status": "published"},
+        )
+        assert blocked.status_code == 409
+
+        editor = admin.get(f"/admin/academy/lessons/{lesson['id']}")
+        first_title = lesson["title"] + " – redigerad"
+        form = {
+            "csrf": csrf_from(editor), "title": first_title,
+            "learning_objective": lesson["learning_objective"], "body": lesson["body"],
+            "example": lesson["example"], "exercise": lesson["exercise"], "video_url": lesson["video_url"],
+            "diagram_kind": lesson["diagram_kind"], "status": lesson["status"],
+            "question_text": question["question"], "choice_1": choices[0], "choice_2": choices[1], "choice_3": choices[2],
+            "correct_index": str(question["correct_index"]), "explanation": question["explanation"],
+        }
+        assert admin.post(f"/admin/academy/lessons/{lesson['id']}",data=form,follow_redirects=False).status_code == 303
+        editor = admin.get(f"/admin/academy/lessons/{lesson['id']}")
+        assert "Version 1" in editor.text
+        form["csrf"] = csrf_from(editor);form["title"] = lesson["title"] + " – andra versionen"
+        assert admin.post(f"/admin/academy/lessons/{lesson['id']}",data=form,follow_redirects=False).status_code == 303
+
+    with module.db() as connection:
+        versions = connection.execute("SELECT * FROM academy_lesson_versions WHERE lesson_id=? ORDER BY version_number",(lesson["id"],)).fetchall()
+        assert len(versions) == 2
+
+    with TestClient(module.app, base_url="http://testserver") as admin:
+        login(admin, "admin")
+        editor = admin.get(f"/admin/academy/lessons/{lesson['id']}")
+        restored = admin.post(
+            f"/admin/academy/lessons/{lesson['id']}/versions/{versions[0]['id']}/restore",
+            data={"csrf": csrf_from(editor)}, follow_redirects=False,
+        )
+        assert restored.status_code == 303
+
+    with module.db() as connection:
+        current = connection.execute("SELECT title FROM academy_lessons WHERE id=?",(lesson["id"],)).fetchone()
+        assert current["title"] == first_title
+        assert connection.execute("SELECT COUNT(*) AS c FROM academy_lesson_versions WHERE lesson_id=?",(lesson["id"],)).fetchone()["c"] == 3
+        assert connection.execute("SELECT status FROM academy_courses WHERE id=?",(advanced_id,)).fetchone()["status"] == "draft"
