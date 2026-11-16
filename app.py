@@ -621,9 +621,16 @@ def dashboard(request:Request):
     u=require_user(request)
     admin_applications=[]
     academy_exam_count=0
+    assignment_select='''SELECT a.*,c.name AS club_name,u.name AS scout_name,
+        ar.id AS approved_report_id,ar.kind AS approved_report_kind,ar.updated_at AS completed_at
+        FROM assignments a JOIN clubs c ON c.id=a.club_id LEFT JOIN users u ON u.id=a.scout_id
+        LEFT JOIN reports ar ON ar.id=(SELECT r.id FROM reports r
+            WHERE r.assignment_id=a.id AND r.status='approved'
+            ORDER BY r.updated_at DESC,r.id DESC LIMIT 1)
+        WHERE a.purpose='club' '''
     with db() as con:
         if u['role']=='admin':
-            assignments=con.execute("SELECT a.*,c.name AS club_name,u.name AS scout_name FROM assignments a JOIN clubs c ON c.id=a.club_id LEFT JOIN users u ON u.id=a.scout_id WHERE a.purpose='club' ORDER BY a.id DESC").fetchall()
+            assignments=con.execute(assignment_select+'ORDER BY a.id DESC').fetchall()
             reports=con.execute("SELECT r.*,a.title AS assignment_title,c.name AS club_name FROM reports r JOIN assignments a ON a.id=r.assignment_id JOIN clubs c ON c.id=a.club_id WHERE a.purpose='club' ORDER BY r.id DESC LIMIT 12").fetchall()
             admin_applications=con.execute('''SELECT ap.id,ap.assignment_id,ap.scout_id,ap.created_at,
                 a.title,a.fixture,c.name AS club_name,u.name AS scout_name,u.email AS scout_email
@@ -632,12 +639,15 @@ def dashboard(request:Request):
                 WHERE a.scout_id IS NULL ORDER BY ap.created_at DESC''').fetchall()
             academy_exam_count=con.execute("SELECT COUNT(*) AS c FROM academy_examinations WHERE status='submitted'").fetchone()['c']
         elif u['role']=='club':
-            assignments=con.execute("SELECT a.*,c.name AS club_name,u.name AS scout_name FROM assignments a JOIN clubs c ON c.id=a.club_id LEFT JOIN users u ON u.id=a.scout_id WHERE a.club_id=? AND a.purpose='club' ORDER BY a.id DESC",(u['club_id'],)).fetchall()
+            assignments=con.execute(assignment_select+'AND a.club_id=? ORDER BY a.id DESC',(u['club_id'],)).fetchall()
             reports=con.execute("SELECT r.*,a.title AS assignment_title,c.name AS club_name FROM reports r JOIN assignments a ON a.id=r.assignment_id JOIN clubs c ON c.id=a.club_id WHERE a.club_id=? AND a.purpose='club' AND r.status=? ORDER BY r.id DESC",(u['club_id'],'approved')).fetchall()
         else:
-            assignments=con.execute("SELECT a.*,c.name AS club_name,u.name AS scout_name FROM assignments a JOIN clubs c ON c.id=a.club_id LEFT JOIN users u ON u.id=a.scout_id WHERE a.purpose='club' AND (a.scout_id=? OR a.scout_id IS NULL) ORDER BY a.id DESC",(u['id'],)).fetchall()
+            assignments=con.execute(assignment_select+'AND (a.scout_id=? OR a.scout_id IS NULL) ORDER BY a.id DESC',(u['id'],)).fetchall()
             reports=con.execute("SELECT r.*,a.title AS assignment_title,c.name AS club_name FROM reports r JOIN assignments a ON a.id=r.assignment_id JOIN clubs c ON c.id=a.club_id WHERE r.scout_id=? AND a.purpose='club' ORDER BY r.id DESC",(u['id'],)).fetchall()
-    return page(request,'dashboard.html',assignments=assignments,reports=reports,admin_applications=admin_applications,academy_exam_count=academy_exam_count)
+    completed_assignments=[a for a in assignments if a['approved_report_id'] and (u['role']!='scout' or a['scout_id']==u['id'])]
+    completed_assignments.sort(key=lambda a:(a['completed_at'] or '',a['id']),reverse=True)
+    active_assignments=[a for a in assignments if not a['approved_report_id']]
+    return page(request,'dashboard.html',active_assignments=active_assignments,completed_assignments=completed_assignments,reports=reports,admin_applications=admin_applications,academy_exam_count=academy_exam_count)
 
 @app.get('/assignments/new',response_class=HTMLResponse)
 def new_assignment_page(request:Request):

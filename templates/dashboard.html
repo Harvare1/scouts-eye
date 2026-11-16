@@ -16,14 +16,23 @@
 {% endif %}
 {% if user['role']=='admin' and academy_exam_count %}<div class="attention-panel"><span class="eyebrow">Academy · Åtgärd krävs</span><h2 class="h2">{{academy_exam_count}} examination{{'' if academy_exam_count==1 else 'er'}} väntar</h2><a class="btn" href="/admin/academy/examinations">Öppna granskningskö →</a></div>{% endif %}
 
-<div class="grid {{'cols2' if user['role']=='club' else 'cols3'}}" style="margin:28px 0">
-  <div class="card"><span class="eyebrow">Uppdrag</span><div class="dashboard-number">{{assignments|length}}</div><p class="muted small">Synliga uppdrag</p></div>
+<div class="grid cols3" style="margin:28px 0">
+  <div class="card"><span class="eyebrow">Aktiva uppdrag</span><div class="dashboard-number">{{active_assignments|length}}</div><p class="muted small">Lediga eller pågående</p></div>
+  <div class="card"><span class="eyebrow">Slutförda uppdrag</span><div class="dashboard-number">{{completed_assignments|length}}</div><p class="muted small">Godkända och levererade</p></div>
   <div class="card"><span class="eyebrow">Rapporter</span><div class="dashboard-number">{{reports|length}}</div><p class="muted small">{% if user['role']=='club' %}Godkända rapporter{% else %}Rapporter i arbetsytan{% endif %}</p></div>
-  {% if user['role'] in ['scout','admin'] %}<div class="card"><span class="eyebrow">Scout Academy</span><div style="margin-top:19px"><a class="btn outline" href="/courses">Öppna utbildning →</a></div></div>{% endif %}
 </div>
 
-<div class="panel-head"><h2 class="h2">Matchuppdrag</h2>{% if user['role'] in ['club','admin'] %}<a class="btn" href="/assignments/new">+ Nytt uppdrag</a>{% endif %}</div>
-<div class="list">{% for a in assignments %}<div class="list-item"><div><strong>{{a['title']}}</strong><div class="meta">{{a['fixture']}} · {{a['club_name']}} · {% if a['scout_name'] %}Tilldelad: {{a['scout_name']}}{% else %}Väntar på tilldelning av Andrablicken{% endif %}</div></div><a class="btn outline small" href="/assignments/{{a['id']}}">Visa uppdrag →</a></div>{% else %}<div class="card">Inga uppdrag än.</div>{% endfor %}</div>
+<section id="active-assignments">
+<div class="panel-head"><div><span class="eyebrow">Arbetskö</span><h2 class="h2">Aktiva uppdrag</h2></div>{% if user['role'] in ['club','admin'] %}<a class="btn" href="/assignments/new">+ Nytt uppdrag</a>{% endif %}</div>
+<div class="list">{% for a in active_assignments %}<div class="list-item"><div><strong>{{a['title']}}</strong><div class="meta">{{a['fixture']}} · {{a['club_name']}} · {% if a['scout_name'] %}Tilldelad: {{a['scout_name']}}{% else %}Väntar på tilldelning av Andrablicken{% endif %}</div></div><span class="tag {{'sent' if a['scout_name'] else 'draft'}}">{{'Pågår' if a['scout_name'] else 'Ej tilldelad'}}</span><a class="btn outline small" href="/assignments/{{a['id']}}">Visa uppdrag →</a></div>{% else %}<div class="card">Inga aktiva uppdrag.</div>{% endfor %}</div>
+</section>
+
+<section id="completed-assignments" class="completed-assignments">
+<div class="panel-head"><div><span class="eyebrow">Leveranshistorik</span><h2 class="h2">Slutförda uppdrag</h2></div></div>
+<p class="muted small">Uppdrag hamnar här automatiskt när admin har godkänt en rapport och gjort den tillgänglig för klubben.</p>
+<div class="list">{% for a in completed_assignments %}<div class="list-item completed-assignment"><div><strong>{{a['title']}}</strong><div class="meta">{{a['fixture']}} · {{a['club_name']}}{% if a['scout_name'] %} · Scout: {{a['scout_name']}}{% endif %} · Levererad {{a['completed_at'][:10]}}</div></div><span class="tag approved">Slutförd</span><div class="buttons compact"><a class="btn outline small" href="/assignments/{{a['id']}}">Visa uppdrag</a><a class="btn small" href="/reports/{{a['approved_report_id']}}">Öppna rapport →</a></div></div>{% else %}<div class="card">Inga slutförda uppdrag ännu.</div>{% endfor %}</div>
+</section>
+
 <div class="panel-head" style="margin-top:38px"><h2 class="h2">{% if user['role']=='admin' %}Rapporter att granska{% elif user['role']=='club' %}Mottagna rapporter{% else %}Mina rapporter{% endif %}</h2></div>
 <div class="list">{% for r in reports %}<div class="list-item"><div><strong>{{r['assignment_title']}}</strong><div class="meta">{{'Spelarrapport' if r['kind']=='player' else 'Motståndarrapport'}} · {{r['club_name']}}</div></div><span class="tag {{r['status']}}">{{'Godkänd' if r['status']=='approved' else ('Inskickad' if r['status']=='submitted' else ('Komplettera' if r['status']=='changes_requested' else 'Utkast'))}}</span><a class="btn outline small" href="/reports/{{r['id']}}">Öppna →</a></div>{% else %}<div class="card">Inga rapporter än.</div>{% endfor %}</div>
 {% endblock %}
