@@ -1,7 +1,6 @@
 <!doctype html>
 <html lang="sv"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0f1712"><title>{% block title %}Andrablicken{% endblock %} · Scouting Network</title><link rel="stylesheet" href="/static/portal.css"></head>
 <body>
-<a class="skip-link" href="#main-content">Hoppa till huvudinnehåll</a>
 <header class="top"><div class="wrap">
 <a class="logo" aria-label="Andrablicken – startsida" href="{% if user %}/app{% else %}/{% endif %}"><span class="logo-icon" aria-hidden="true">A</span><span class="logo-lines"><strong>ANDRABLICKEN</strong><small>SCOUTING NETWORK</small></span></a>
 <nav aria-label="Huvudmeny">{% if user %}<a href="/app">Uppdrag</a>{% if user['role']=='scout' %}<a href="/scouts/me">Scoutprofil</a>{% endif %}{% if user['role']=='admin' %}<a href="/admin/users">Konton</a><a href="/admin/academy">Academy-admin</a>{% endif %}{% if user['role'] in ['scout','admin'] %}<a href="/courses">Scout Academy</a>{% endif %}<a href="/mallbibliotek">Mallbibliotek</a><a href="/account">Mitt konto</a><span class="small muted">{{user['name']}} · {{'Scout' if user['role']=='scout' else ('Klubb' if user['role']=='club' else 'Admin')}}</span><form class="logout" method="post" action="/logout"><input type="hidden" name="csrf" value="{{csrf}}"><button>Logga ut</button></form>{% else %}<a href="/">Startsidan</a>{% if allow_registration %}<a href="/register">Skapa konto</a>{% endif %}<a href="/login">Logga in</a>{% endif %}</nav>

@@ -61,6 +61,7 @@ def test_admin_can_manage_accounts_and_sessions(monkeypatch, tmp_path):
         users_page = admin.get("/admin/users")
         assert users_page.status_code == 200
         assert "KLUBBAR & KONTON" in users_page.text
+        assert "Hoppa till huvudinnehåll" not in users_page.text
         assert "Alla personliga konton" in users_page.text
         assert 'class="entity-card"' in users_page.text
         assert 'class="entity-card" open' not in users_page.text
