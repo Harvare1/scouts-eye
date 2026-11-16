@@ -67,12 +67,25 @@ def init_academy(con):
         id INTEGER PRIMARY KEY, enrollment_id INTEGER NOT NULL UNIQUE REFERENCES academy_enrollments(id),
         code TEXT NOT NULL UNIQUE, issued_at TEXT NOT NULL, issued_by INTEGER NOT NULL REFERENCES users(id), revoked_at TEXT
     );
+    CREATE TABLE IF NOT EXISTS academy_course_interest(
+        id INTEGER PRIMARY KEY, course_id INTEGER NOT NULL REFERENCES academy_courses(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at TEXT NOT NULL, notified_at TEXT, UNIQUE(course_id,user_id)
+    );
+    CREATE TABLE IF NOT EXISTS academy_lesson_versions(
+        id INTEGER PRIMARY KEY, lesson_id INTEGER NOT NULL REFERENCES academy_lessons(id) ON DELETE CASCADE,
+        version_number INTEGER NOT NULL, content_json TEXT NOT NULL,
+        created_by INTEGER NOT NULL REFERENCES users(id), created_at TEXT NOT NULL,
+        UNIQUE(lesson_id,version_number)
+    );
     CREATE TABLE IF NOT EXISTS academy_audit_log(
         id INTEGER PRIMARY KEY, actor_user_id INTEGER REFERENCES users(id), action TEXT NOT NULL,
         entity_type TEXT NOT NULL, entity_id INTEGER, metadata_json TEXT NOT NULL DEFAULT '{}', created_at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS academy_progress_enrollment_idx ON academy_lesson_progress(enrollment_id);
     CREATE INDEX IF NOT EXISTS academy_examinations_status_idx ON academy_examinations(status);
+    CREATE INDEX IF NOT EXISTS academy_interest_course_idx ON academy_course_interest(course_id);
+    CREATE INDEX IF NOT EXISTS academy_versions_lesson_idx ON academy_lesson_versions(lesson_id,version_number DESC);
     ''')
     lesson_columns={row['name'] for row in con.execute('PRAGMA table_info(academy_lessons)').fetchall()}
     if 'video_url' not in lesson_columns:

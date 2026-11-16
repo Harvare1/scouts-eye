@@ -690,7 +690,8 @@ def edit_report(request:Request,rid:int):
     if not r:raise HTTPException(404)
     if u['role']!='admin' and r['scout_id']!=u['id']:raise HTTPException(403)
     if r['status'] in ('approved','submitted'):raise HTTPException(409,'Rapporten är låst under granskning eller efter godkännande.')
-    return page(request,'edit_report.html',r=r,payload=json.loads(r['payload']),chapters=editor_chapters(r['kind']),time_evidence_fields=TIME_EVIDENCE_FIELDS)
+    with db() as con:academy_exam=con.execute('SELECT id,status FROM academy_examinations WHERE report_id=?',(rid,)).fetchone()
+    return page(request,'edit_report.html',r=r,payload=json.loads(r['payload']),chapters=editor_chapters(r['kind']),time_evidence_fields=TIME_EVIDENCE_FIELDS,academy_exam=academy_exam)
 
 @app.post('/reports/{rid}/save')
 async def save_report(request:Request,rid:int):
@@ -708,15 +709,23 @@ async def save_report(request:Request,rid:int):
     if action=='submit' and not any(payload.get(k) for k in ('recommendation','summary')):
         notice(request,'Skriv en rekommendation eller slutsats innan du skickar in rapporten.')
         return go(f'/reports/{rid}/edit')
+    with db() as con:exam=con.execute('SELECT id,enrollment_id FROM academy_examinations WHERE report_id=?',(rid,)).fetchone()
+    exam_issues=_academy_exam_issues(kind,payload) if exam and action=='submit' else []
     status='submitted' if action=='submit' else 'draft'
+    if exam_issues:status='draft'
     now=datetime.now().isoformat(timespec='minutes')
     with db() as con:
         con.execute('UPDATE reports SET payload=?,status=?,review_note=?,updated_at=? WHERE id=?',(json.dumps(payload,ensure_ascii=False),status,'',now,rid))
-        exam=con.execute('SELECT id,enrollment_id FROM academy_examinations WHERE report_id=?',(rid,)).fetchone()
         if exam and action=='submit':
-            con.execute("UPDATE academy_examinations SET status='submitted',submitted_at=? WHERE id=?",(now,exam['id']))
-            con.execute("UPDATE academy_enrollments SET status='submitted' WHERE id=?",(exam['enrollment_id'],))
-            academy_audit(con,u['id'],'examination_submitted','academy_examination',exam['id'],{'report_id':rid})
+            if exam_issues:
+                academy_audit(con,u['id'],'examination_validation_failed','academy_examination',exam['id'],{'report_id':rid,'issues':exam_issues})
+            else:
+                con.execute("UPDATE academy_examinations SET status='submitted',submitted_at=? WHERE id=?",(now,exam['id']))
+                con.execute("UPDATE academy_enrollments SET status='submitted' WHERE id=?",(exam['enrollment_id'],))
+                academy_audit(con,u['id'],'examination_submitted','academy_examination',exam['id'],{'report_id':rid})
+    if exam_issues:
+        notice(request,'Rapporten sparades, men kan inte skickas in ännu: '+' '.join(exam_issues))
+        return go(f'/reports/{rid}/edit')
     notice(request,'Rapporten skickades för granskning.' if action=='submit' else 'Utkastet sparades.')
     return go(f'/reports/{rid}' if action=='submit' else f'/reports/{rid}/edit')
 
@@ -790,6 +799,59 @@ def _choices(value):
 def _academy_enrollment(con,course_id,user_id):
     return con.execute('SELECT * FROM academy_enrollments WHERE course_id=? AND user_id=?',(course_id,user_id)).fetchone()
 
+def _academy_report_points(value):
+    return [part.strip(' \t-•0123456789.)') for part in re.split(r'[\r\n;]+',str(value or '')) if part.strip(' \t-•0123456789.)')]
+
+def _academy_exam_issues(kind,payload):
+    observation_key='events' if kind=='player' else 'observations'
+    timestamps=set(re.findall(r'(?<!\d)(?:\d{1,3}):[0-5]\d(?!\d)',payload.get(observation_key,'')))
+    uncertainty_key='confidence' if kind=='player' else 'limitations'
+    issues=[]
+    if len(timestamps)<5:issues.append(f'Minst fem olika tidsstämplade observationer krävs ({len(timestamps)} hittades).')
+    if len(_academy_report_points(payload.get('strengths')))<2:issues.append('Beskriv minst två styrkor på separata rader.')
+    if len(_academy_report_points(payload.get('weaknesses')))<2:issues.append('Beskriv minst två begränsningar eller utvecklingsområden på separata rader.')
+    if len(payload.get('recommendation','').strip())<20:issues.append('Skriv en konkret rekommendation på minst 20 tecken.')
+    if len(payload.get(uncertainty_key,'').strip())<20:issues.append('Beskriv osäkerhet och observationsunderlag på minst 20 tecken.')
+    return issues
+
+def _academy_publish_issues(con,course_id):
+    course=con.execute('SELECT * FROM academy_courses WHERE id=?',(course_id,)).fetchone()
+    if not course:return ['Kursen finns inte.']
+    issues=[]
+    if len(course['title'].strip())<3:issues.append('Kursen saknar en tydlig titel.')
+    if len(course['summary'].strip())<40:issues.append('Kursbeskrivningen måste vara minst 40 tecken.')
+    if course['estimated_minutes']<=0:issues.append('Studietid måste anges.')
+    if course['access_type']=='paid' and course['price_ore']<=0:issues.append('En betald kurs måste ha ett pris.')
+    modules=con.execute('SELECT * FROM academy_modules WHERE course_id=? ORDER BY position',(course_id,)).fetchall()
+    if not modules:issues.append('Kursen måste ha minst en modul.')
+    for module in modules:
+        if module['status']!='published':issues.append(f'Modul {module["position"]} är inte publiceringsklar.')
+        lessons=con.execute('SELECT * FROM academy_lessons WHERE module_id=? ORDER BY position',(module['id'],)).fetchall()
+        if not lessons:issues.append(f'Modul {module["position"]} saknar lektioner.')
+        for lesson in lessons:
+            prefix=f'Lektion {module["position"]}.{lesson["position"]}'
+            if lesson['status']!='published':issues.append(prefix+' är inte publiceringsklar.')
+            if min(len(lesson['learning_objective'].strip()),len(lesson['body'].strip()),len(lesson['exercise'].strip()))<10:
+                issues.append(prefix+' saknar lärandemål, undervisningsmaterial eller övning.')
+            if not con.execute('SELECT 1 FROM academy_lesson_questions WHERE lesson_id=?',(lesson['id'],)).fetchone():issues.append(prefix+' saknar kunskapsfråga.')
+    quiz_count=con.execute('SELECT COUNT(*) AS c FROM academy_quiz_questions WHERE course_id=?',(course_id,)).fetchone()['c']
+    if quiz_count<10:issues.append(f'Kunskapstestet måste ha minst 10 frågor ({quiz_count} finns).')
+    return issues
+
+def _academy_lesson_snapshot(con,lesson_id):
+    lesson=con.execute('SELECT * FROM academy_lessons WHERE id=?',(lesson_id,)).fetchone()
+    if not lesson:return None
+    question=con.execute('SELECT question,choices_json,correct_index,explanation FROM academy_lesson_questions WHERE lesson_id=?',(lesson_id,)).fetchone()
+    return {'lesson':dict(lesson),'question':dict(question) if question else None}
+
+def _save_academy_lesson_version(con,lesson_id,admin_id):
+    snapshot=_academy_lesson_snapshot(con,lesson_id)
+    if not snapshot:return None
+    number=con.execute('SELECT COALESCE(MAX(version_number),0)+1 AS n FROM academy_lesson_versions WHERE lesson_id=?',(lesson_id,)).fetchone()['n']
+    con.execute('INSERT INTO academy_lesson_versions(lesson_id,version_number,content_json,created_by,created_at) VALUES (?,?,?,?,?)',
+        (lesson_id,number,json.dumps(snapshot,ensure_ascii=False),admin_id,datetime.now().isoformat(timespec='minutes')))
+    return number
+
 @app.get('/courses',response_class=HTMLResponse)
 def courses(request:Request):
     u=require_user(request,('scout','admin'))
@@ -797,7 +859,15 @@ def courses(request:Request):
         rows=con.execute('''SELECT c.*,e.id AS enrollment_id,e.status AS enrollment_status,
             (SELECT COUNT(*) FROM academy_modules m WHERE m.course_id=c.id) AS module_count,
             (SELECT COUNT(*) FROM academy_lessons l JOIN academy_modules m ON m.id=l.module_id WHERE m.course_id=c.id) AS lesson_count,
-            (SELECT COUNT(*) FROM academy_lesson_progress p WHERE p.enrollment_id=e.id AND p.completed_at IS NOT NULL) AS completed_lessons
+            (SELECT COUNT(*) FROM academy_lesson_progress p WHERE p.enrollment_id=e.id AND p.completed_at IS NOT NULL) AS completed_lessons,
+            (SELECT l.id FROM academy_lessons l JOIN academy_modules m ON m.id=l.module_id
+                LEFT JOIN academy_lesson_progress p ON p.lesson_id=l.id AND p.enrollment_id=e.id
+                WHERE m.course_id=c.id AND p.completed_at IS NULL ORDER BY m.position,l.position LIMIT 1) AS resume_lesson_id,
+            (SELECT MAX(activity_at) FROM (
+                SELECT p.updated_at AS activity_at FROM academy_lesson_progress p WHERE p.enrollment_id=e.id
+                UNION ALL SELECT q.created_at FROM academy_quiz_attempts q WHERE q.enrollment_id=e.id
+                UNION ALL SELECT COALESCE(x.reviewed_at,x.submitted_at,x.created_at) FROM academy_examinations x WHERE x.enrollment_id=e.id
+            )) AS last_activity
             FROM academy_courses c LEFT JOIN academy_enrollments e ON e.course_id=c.id AND e.user_id=?
             WHERE c.status<>'archived' ORDER BY c.id''',(u['id'],)).fetchall()
     return page(request,'courses.html',courses=rows)
@@ -817,8 +887,14 @@ def course_detail(request:Request,slug:str):
         quiz=con.execute('SELECT * FROM academy_quiz_attempts WHERE enrollment_id=? ORDER BY id DESC LIMIT 1',(enrollment['id'],)).fetchone() if enrollment else None
         exam=con.execute('SELECT * FROM academy_examinations WHERE enrollment_id=? ORDER BY id DESC LIMIT 1',(enrollment['id'],)).fetchone() if enrollment else None
         certificate=con.execute('SELECT * FROM academy_certificates WHERE enrollment_id=? AND revoked_at IS NULL',(enrollment['id'],)).fetchone() if enrollment else None
+        interest=con.execute('SELECT * FROM academy_course_interest WHERE course_id=? AND user_id=?',(course['id'],u['id'])).fetchone() if u['role']=='scout' else None
     available=course['slug']=='introduktion-fotbollsscouting' and course['access_type']=='free'
-    return page(request,'course_detail.html',course=course,modules=modules,lessons=lessons,enrollment=enrollment,progress=progress,quiz=quiz,exam=exam,certificate=certificate,available=available)
+    resume_lesson=next((lesson for lesson in lessons if not progress.get(lesson['id']) or not progress[lesson['id']]['completed_at']),None) if enrollment else None
+    activity_dates=[row['updated_at'] for row in progress.values() if row['updated_at']]
+    if quiz:activity_dates.append(quiz['created_at'])
+    if exam:activity_dates.append(exam['reviewed_at'] or exam['submitted_at'] or exam['created_at'])
+    last_activity=max(activity_dates) if activity_dates else None
+    return page(request,'course_detail.html',course=course,modules=modules,lessons=lessons,enrollment=enrollment,progress=progress,quiz=quiz,exam=exam,certificate=certificate,available=available,interest=interest,resume_lesson=resume_lesson,last_activity=last_activity)
 
 @app.post('/courses/{course_id}/enroll')
 async def academy_enroll(request:Request,course_id:int,csrf:str=Form(...)):
@@ -831,6 +907,20 @@ async def academy_enroll(request:Request,course_id:int,csrf:str=Form(...)):
         con.execute("INSERT OR IGNORE INTO academy_enrollments(course_id,user_id,status,enrolled_at) VALUES (?,?,'in_progress',?)",(course_id,u['id'],now))
         enrollment=_academy_enrollment(con,course_id,u['id']);academy_audit(con,u['id'],'enrolled','academy_enrollment',enrollment['id'],{'course_id':course_id})
     notice(request,'Du är registrerad på den kostnadsfria grundkursen.')
+    return go(f'/courses/{course["slug"]}')
+
+@app.post('/courses/{course_id}/interest')
+async def academy_course_interest(request:Request,course_id:int,csrf:str=Form(...)):
+    u=require_user(request,('scout',));check_token(request,csrf)
+    with db() as con:
+        course=con.execute('SELECT * FROM academy_courses WHERE id=?',(course_id,)).fetchone()
+        if not course:raise HTTPException(404)
+        if course['access_type']!='paid' or course['status']=='archived':raise HTTPException(409,'Kursen tar inte emot intresseanmälningar.')
+        now=datetime.now().isoformat(timespec='minutes')
+        cursor=con.execute('INSERT OR IGNORE INTO academy_course_interest(course_id,user_id,created_at) VALUES (?,?,?)',(course_id,u['id'],now))
+        interest=con.execute('SELECT id FROM academy_course_interest WHERE course_id=? AND user_id=?',(course_id,u['id'])).fetchone()
+        if cursor.rowcount:academy_audit(con,u['id'],'course_interest_registered','academy_course_interest',interest['id'],{'course_id':course_id})
+    notice(request,'Tack! Vi meddelar dig när anmälan till kursen öppnar.' if cursor.rowcount else 'Du står redan på intresselistan för kursen.')
     return go(f'/courses/{course["slug"]}')
 
 @app.get('/courses/lessons/{lesson_id}',response_class=HTMLResponse)
@@ -951,12 +1041,16 @@ def admin_academy(request:Request):
     require_user(request,('admin',))
     with db() as con:
         courses=con.execute('''SELECT c.*,(SELECT COUNT(*) FROM academy_modules m WHERE m.course_id=c.id) AS module_count,
-            (SELECT COUNT(*) FROM academy_lessons l JOIN academy_modules m ON m.id=l.module_id WHERE m.course_id=c.id) AS lesson_count
+            (SELECT COUNT(*) FROM academy_lessons l JOIN academy_modules m ON m.id=l.module_id WHERE m.course_id=c.id) AS lesson_count,
+            (SELECT COUNT(*) FROM academy_course_interest i WHERE i.course_id=c.id) AS interest_count
             FROM academy_courses c ORDER BY c.id''').fetchall()
         modules=con.execute('SELECT m.*,c.title AS course_title FROM academy_modules m JOIN academy_courses c ON c.id=m.course_id ORDER BY c.id,m.position').fetchall()
         lessons=con.execute('''SELECT l.id,l.module_id,l.position,l.title,l.status,m.course_id
             FROM academy_lessons l JOIN academy_modules m ON m.id=l.module_id ORDER BY m.course_id,m.position,l.position''').fetchall()
-    return page(request,'admin_academy.html',courses=courses,modules=modules,lessons=lessons)
+        interests=con.execute('''SELECT i.course_id,i.created_at,u.name,u.email FROM academy_course_interest i
+            JOIN users u ON u.id=i.user_id ORDER BY i.created_at DESC''').fetchall()
+        publish_issues={course['id']:_academy_publish_issues(con,course['id']) for course in courses}
+    return page(request,'admin_academy.html',courses=courses,modules=modules,lessons=lessons,publish_issues=publish_issues,interests=interests)
 
 @app.post('/admin/academy/courses')
 async def admin_create_course(request:Request,title:str=Form(...),slug:str=Form(...),summary:str=Form(''),level:str=Form(''),access_type:str=Form('free'),price_ore:int=Form(0),estimated_minutes:int=Form(0),csrf:str=Form(...)):
@@ -976,7 +1070,11 @@ async def admin_update_course(request:Request,course_id:int,title:str=Form(...),
     if access_type not in ('free','paid') or status not in ('draft','published','archived'):raise HTTPException(400)
     with db() as con:
         if not con.execute('SELECT 1 FROM academy_courses WHERE id=?',(course_id,)).fetchone():raise HTTPException(404)
-        con.execute('UPDATE academy_courses SET title=?,summary=?,level=?,access_type=?,price_ore=?,estimated_minutes=?,status=?,updated_at=? WHERE id=?',(title.strip()[:160],summary[:2000],level[:80],access_type,max(0,price_ore),max(0,estimated_minutes),status,datetime.now().isoformat(timespec='minutes'),course_id));academy_audit(con,admin['id'],'course_updated','academy_course',course_id)
+        con.execute('UPDATE academy_courses SET title=?,summary=?,level=?,access_type=?,price_ore=?,estimated_minutes=?,status=?,updated_at=? WHERE id=?',(title.strip()[:160],summary[:2000],level[:80],access_type,max(0,price_ore),max(0,estimated_minutes),status,datetime.now().isoformat(timespec='minutes'),course_id))
+        if status=='published':
+            issues=_academy_publish_issues(con,course_id)
+            if issues:raise HTTPException(409,'Kursen kan inte publiceras: '+' '.join(issues))
+        academy_audit(con,admin['id'],'course_updated','academy_course',course_id,{'status':status})
     return go('/admin/academy')
 
 @app.post('/admin/academy/modules')
@@ -1011,10 +1109,13 @@ def admin_edit_lesson(request:Request,lesson_id:int):
     with db() as con:
         lesson=con.execute('''SELECT l.*,m.title AS module_title,c.title AS course_title FROM academy_lessons l JOIN academy_modules m ON m.id=l.module_id JOIN academy_courses c ON c.id=m.course_id WHERE l.id=?''',(lesson_id,)).fetchone()
         question=con.execute('SELECT * FROM academy_lesson_questions WHERE lesson_id=?',(lesson_id,)).fetchone()
+        versions=con.execute('''SELECT v.id,v.version_number,v.created_at,u.name AS created_by_name
+            FROM academy_lesson_versions v JOIN users u ON u.id=v.created_by
+            WHERE v.lesson_id=? ORDER BY v.version_number DESC''',(lesson_id,)).fetchall()
     if not lesson:raise HTTPException(404)
     question_data=dict(question) if question else None
     if question_data:question_data['choices']=_choices(question_data['choices_json'])
-    return page(request,'admin_academy_lesson.html',lesson=lesson,question=question_data)
+    return page(request,'admin_academy_lesson.html',lesson=lesson,question=question_data,versions=versions)
 
 @app.post('/admin/academy/lessons/{lesson_id}')
 async def admin_update_lesson(request:Request,lesson_id:int,title:str=Form(...),learning_objective:str=Form(''),body:str=Form(''),example:str=Form(''),exercise:str=Form(''),video_url:str=Form(''),diagram_kind:str=Form('none'),status:str=Form('draft'),question_text:str=Form(''),choice_1:str=Form(''),choice_2:str=Form(''),choice_3:str=Form(''),correct_index:int=Form(0),explanation:str=Form(''),csrf:str=Form(...)):
@@ -1029,8 +1130,29 @@ async def admin_update_lesson(request:Request,lesson_id:int,title:str=Form(...),
             con.execute('''INSERT INTO academy_lesson_questions(lesson_id,question,choices_json,correct_index,explanation)
                 VALUES (?,?,?,?,?) ON CONFLICT(lesson_id) DO UPDATE SET question=excluded.question,choices_json=excluded.choices_json,
                 correct_index=excluded.correct_index,explanation=excluded.explanation''',(lesson_id,question_text.strip()[:1000],json.dumps(choices,ensure_ascii=False),correct_index,explanation[:3000]))
-        academy_audit(con,admin['id'],'lesson_updated','academy_lesson',lesson_id)
+        version_number=_save_academy_lesson_version(con,lesson_id,admin['id'])
+        academy_audit(con,admin['id'],'lesson_updated','academy_lesson',lesson_id,{'version':version_number})
     notice(request,'Lektionen har sparats som '+status+'.');return go(f'/admin/academy/lessons/{lesson_id}')
+
+@app.post('/admin/academy/lessons/{lesson_id}/versions/{version_id}/restore')
+async def admin_restore_lesson_version(request:Request,lesson_id:int,version_id:int,csrf:str=Form(...)):
+    admin=require_user(request,('admin',));check_token(request,csrf)
+    with db() as con:
+        version=con.execute('SELECT * FROM academy_lesson_versions WHERE id=? AND lesson_id=?',(version_id,lesson_id)).fetchone()
+        if not version:raise HTTPException(404)
+        try:snapshot=json.loads(version['content_json']);lesson=snapshot['lesson'];question=snapshot.get('question')
+        except (ValueError,KeyError,TypeError):raise HTTPException(409,'Versionen kan inte återställas.')
+        con.execute('''UPDATE academy_lessons SET title=?,learning_objective=?,body=?,example=?,exercise=?,video_url=?,diagram_kind=?,status=? WHERE id=?''',
+            (lesson['title'],lesson['learning_objective'],lesson['body'],lesson['example'],lesson['exercise'],lesson.get('video_url',''),lesson['diagram_kind'],lesson['status'],lesson_id))
+        if question:
+            con.execute('''INSERT INTO academy_lesson_questions(lesson_id,question,choices_json,correct_index,explanation)
+                VALUES (?,?,?,?,?) ON CONFLICT(lesson_id) DO UPDATE SET question=excluded.question,choices_json=excluded.choices_json,
+                correct_index=excluded.correct_index,explanation=excluded.explanation''',
+                (lesson_id,question['question'],question['choices_json'],question['correct_index'],question['explanation']))
+        else:con.execute('DELETE FROM academy_lesson_questions WHERE lesson_id=?',(lesson_id,))
+        new_version=_save_academy_lesson_version(con,lesson_id,admin['id'])
+        academy_audit(con,admin['id'],'lesson_version_restored','academy_lesson',lesson_id,{'restored_version':version['version_number'],'new_version':new_version})
+    notice(request,f'Version {version["version_number"]} har återställts som en ny version.');return go(f'/admin/academy/lessons/{lesson_id}')
 
 @app.get('/admin/academy/examinations',response_class=HTMLResponse)
 def admin_academy_examinations(request:Request):
@@ -1119,6 +1241,9 @@ async def admin_update_course_api(request:Request,course_id:int):
         if not con.execute('SELECT 1 FROM academy_courses WHERE id=?',(course_id,)).fetchone():raise HTTPException(404)
         columns=', '.join(f'{key}=?' for key in updates)
         con.execute(f'UPDATE academy_courses SET {columns} WHERE id=?',(*updates.values(),course_id))
+        if updates.get('status')=='published':
+            issues=_academy_publish_issues(con,course_id)
+            if issues:raise HTTPException(409,{'message':'Kursen kan inte publiceras.','issues':issues})
         academy_audit(con,admin['id'],'course_updated_api','academy_course',course_id,updates)
     return {'id':course_id,'updated':list(updates)}
 
