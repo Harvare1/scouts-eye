@@ -483,22 +483,54 @@ def admin_form_values(name,username,email,role,club_id):
 def admin_users_page(request:Request):
     require_user(request,('admin',))
     with db() as con:
-        clubs=con.execute('SELECT c.*,COUNT(u.id) AS user_count FROM clubs c LEFT JOIN users u ON u.club_id=c.id GROUP BY c.id ORDER BY c.name').fetchall()
+        clubs=con.execute('''SELECT c.*,
+            (SELECT COUNT(*) FROM users u WHERE u.club_id=c.id) AS user_count,
+            (SELECT COUNT(*) FROM users u WHERE u.club_id=c.id AND u.active=1) AS active_user_count,
+            (SELECT COUNT(*) FROM assignments a WHERE a.club_id=c.id AND a.purpose='club') AS assignment_count
+            FROM clubs c ORDER BY c.name='Andrablicken Academy',c.name''').fetchall()
+        assignable_clubs=[club for club in clubs if club['name']!='Andrablicken Academy']
         users=con.execute('SELECT u.*,c.name AS club_name FROM users u LEFT JOIN clubs c ON c.id=u.club_id ORDER BY u.active DESC,u.name').fetchall()
-    return page(request,'admin_users.html',clubs=clubs,users=users)
+    return page(request,'admin_users.html',clubs=clubs,assignable_clubs=assignable_clubs,users=users)
 
 @app.post('/admin/clubs')
 async def admin_create_club(request:Request,name:str=Form(...),csrf:str=Form(...)):
     require_user(request,('admin',));check_token(request,csrf)
     name=name.strip()[:120]
     if not name:raise HTTPException(400,'Klubbnamn krävs.')
+    if name.casefold()=='andrablicken academy'.casefold():
+        notice(request,'Det klubbnamnet är reserverat för Academy-examinationer.')
+        return go('/admin/users')
     try:
-        with db() as con:con.execute('INSERT INTO clubs(name) VALUES (?)',(name,))
+        with db() as con:
+            if con.execute('SELECT 1 FROM clubs WHERE name=? COLLATE NOCASE',(name,)).fetchone():
+                raise sqlite3.IntegrityError
+            con.execute('INSERT INTO clubs(name) VALUES (?)',(name,))
     except sqlite3.IntegrityError:
         notice(request,'Klubbnamnet finns redan.')
         return go('/admin/users')
     notice(request,f'Klubben {name} har skapats.')
     return go('/admin/users')
+
+@app.post('/admin/clubs/{club_id}/update')
+async def admin_update_club(request:Request,club_id:int,name:str=Form(...),csrf:str=Form(...)):
+    require_user(request,('admin',));check_token(request,csrf)
+    name=name.strip()[:120]
+    if not name:
+        notice(request,'Klubbnamn krävs.');return go('/admin/users')
+    with db() as con:
+        club=con.execute('SELECT * FROM clubs WHERE id=?',(club_id,)).fetchone()
+        if not club:raise HTTPException(404)
+        if club['name']=='Andrablicken Academy':
+            notice(request,'Academy-klubben är en skyddad systemkoppling och kan inte redigeras.')
+            return go('/admin/users')
+        duplicate=con.execute('SELECT 1 FROM clubs WHERE id<>? AND name=? COLLATE NOCASE',(club_id,name)).fetchone()
+        if duplicate:
+            notice(request,'Klubbnamnet finns redan.');return go('/admin/users')
+        try:con.execute('UPDATE clubs SET name=? WHERE id=?',(name,club_id))
+        except sqlite3.IntegrityError:
+            notice(request,'Klubbnamnet finns redan.');return go('/admin/users')
+    notice(request,f'Klubben har bytt namn till {name}. Kopplade konton och uppdrag är kvar.')
+    return go(f'/admin/users#club-{club_id}')
 
 @app.post('/admin/users')
 async def admin_create_user(request:Request,name:str=Form(...),username:str=Form(...),email:str=Form(...),role:str=Form(...),club_id:str=Form(''),password:str=Form(...),confirm_password:str=Form(...),csrf:str=Form(...)):
@@ -511,7 +543,10 @@ async def admin_create_user(request:Request,name:str=Form(...),username:str=Form
         return go('/admin/users')
     try:
         with db() as con:
-            if selected_club and not con.execute('SELECT 1 FROM clubs WHERE id=?',(selected_club,)).fetchone():raise ValueError('Klubben finns inte.')
+            if selected_club:
+                club=con.execute('SELECT name FROM clubs WHERE id=?',(selected_club,)).fetchone()
+                if not club:raise ValueError('Klubben finns inte.')
+                if club['name']=='Andrablicken Academy':raise ValueError('Academy-klubben kan inte kopplas till användarkonton.')
             con.execute('INSERT INTO users(name,username,email,password_hash,role,club_id,active,session_version) VALUES (?,?,?,?,?,?,1,1)',(name,username,email,password_hash(password),role,selected_club))
     except sqlite3.IntegrityError:
         notice(request,'Användarnamnet eller e-postadressen används redan.')
@@ -530,8 +565,12 @@ async def admin_update_user(request:Request,user_id:int,name:str=Form(...),usern
     with db() as con:
         target=con.execute('SELECT * FROM users WHERE id=?',(user_id,)).fetchone()
         if not target:raise HTTPException(404)
-        if selected_club and not con.execute('SELECT 1 FROM clubs WHERE id=?',(selected_club,)).fetchone():
-            notice(request,'Klubben finns inte.');return go('/admin/users')
+        if selected_club:
+            club=con.execute('SELECT name FROM clubs WHERE id=?',(selected_club,)).fetchone()
+            if not club:
+                notice(request,'Klubben finns inte.');return go('/admin/users')
+            if club['name']=='Andrablicken Academy':
+                notice(request,'Academy-klubben kan inte kopplas till användarkonton.');return go('/admin/users')
         active_admins=con.execute("SELECT COUNT(*) AS c FROM users WHERE role='admin' AND active=1").fetchone()['c']
         if target['role']=='admin' and target['active'] and role!='admin' and active_admins<=1:
             notice(request,'Den sista aktiva administratören kan inte byta roll.');return go('/admin/users')
