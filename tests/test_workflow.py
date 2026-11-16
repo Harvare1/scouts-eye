@@ -38,6 +38,12 @@ def login(client, username, password=DEMO_PASSWORD):
     assert response.status_code == 303
 
 
+def dashboard_section(response, section_id):
+    match = re.search(fr'<section id="{section_id}".*?</section>', response.text, re.DOTALL)
+    assert match
+    return match.group(0)
+
+
 def test_complete_assignment_report_review_and_tenant_flow(monkeypatch, tmp_path):
     module = load_application(monkeypatch, tmp_path)
     with module.db() as connection:
@@ -93,7 +99,8 @@ def test_complete_assignment_report_review_and_tenant_flow(monkeypatch, tmp_path
             login(admin, "admin")
             dashboard = admin.get("/app")
             assert "1 scoutansökan" in dashboard.text
-            assert "Integrationsuppdrag" in dashboard.text
+            assert "Integrationsuppdrag" in dashboard_section(dashboard, "active-assignments")
+            assert "Integrationsuppdrag" not in dashboard_section(dashboard, "completed-assignments")
             response = admin.post(
                 f"/assignments/{assignment_id}/assign/{scout_id}",
                 data={"csrf": csrf_from(dashboard)},
@@ -175,6 +182,24 @@ def test_complete_assignment_report_review_and_tenant_flow(monkeypatch, tmp_path
         approved_report = club.get(f"/reports/{report_id}")
         assert approved_report.status_code == 200
         assert "Godkänd" in approved_report.text
+        club_dashboard = club.get("/app")
+        assert "Integrationsuppdrag" not in dashboard_section(club_dashboard, "active-assignments")
+        club_completed = dashboard_section(club_dashboard, "completed-assignments")
+        assert "Integrationsuppdrag" in club_completed
+        assert "Slutförd" in club_completed
+        assert f'/reports/{report_id}' in club_completed
+
+        with TestClient(module.app, base_url="http://testserver") as scout:
+            login(scout, "scout")
+            scout_dashboard = scout.get("/app")
+            assert "Integrationsuppdrag" not in dashboard_section(scout_dashboard, "active-assignments")
+            assert "Integrationsuppdrag" in dashboard_section(scout_dashboard, "completed-assignments")
+
+        with TestClient(module.app, base_url="http://testserver") as admin:
+            login(admin, "admin")
+            admin_dashboard = admin.get("/app")
+            assert "Integrationsuppdrag" not in dashboard_section(admin_dashboard, "active-assignments")
+            assert "Integrationsuppdrag" in dashboard_section(admin_dashboard, "completed-assignments")
         pdf = club.get(f"/reports/{report_id}/pdf")
         assert pdf.status_code == 200
         assert pdf.headers["content-type"].startswith("application/pdf")
@@ -206,6 +231,7 @@ def test_complete_assignment_report_review_and_tenant_flow(monkeypatch, tmp_path
 
     with TestClient(module.app, base_url="http://testserver") as rival:
         login(rival, "rival", "rival-password")
+        assert "Integrationsuppdrag" not in rival.get("/app").text
         assert rival.get(f"/assignments/{assignment_id}").status_code == 403
         assert rival.get(f"/reports/{report_id}").status_code == 403
         assert rival.get(f"/reports/{report_id}/attachment").status_code == 403
