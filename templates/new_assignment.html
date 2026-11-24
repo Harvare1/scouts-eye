@@ -11,7 +11,8 @@
   <label class="field"><span>Match / lag</span><input name="fixture" required placeholder="Lag A – Lag B"></label>
   <div class="form-row"><label class="field"><span>Matchdatum</span><input type="date" name="match_date"></label><label class="field"><span>Deadline</span><input type="date" name="deadline"></label></div>
   <label class="field"><span>Behörighetsstyrd videolänk (valfritt)</span><input type="url" name="video_url" placeholder="https://..." inputmode="url"><small>Veo, Hudl eller annan leverantör. Vi sparar länken – inte videofilen. Kontrollera extern åtkomst separat.</small></label>
-  <label class="field"><span>Instruktioner till scout</span><textarea name="instructions" placeholder="Vad ska observeras? Vilka frågor ska rapporten besvara?"></textarea></label>
+  <label class="field"><span>Kort uppdragsbeskrivning (valfritt)</span><textarea name="public_description" maxlength="500" rows="2"></textarea><small>Syns för scouter som kan ansöka. Skriv vad som ska analyseras och håll känsliga detaljer i instruktionerna nedan.</small></label>
+  <label class="field"><span>Instruktioner till scout</span><textarea name="instructions" placeholder="Vad ska observeras? Vilka frågor ska rapporten besvara?"></textarea><small>Syns för klubben, admin och den tilldelade scouten.</small></label>
   <label class="field"><span>Önskemål om specifik scout (tilläggstjänst)</span><textarea name="scout_request" rows="3" placeholder="Skriv scoutnamn, profil eller särskild kompetens ni önskar."></textarea><small>Klubben kan lämna önskemål men Andrablicken fattar beslut om tilldelning. En specifik scout kan innebära extra kostnad och kan inte garanteras.</small></label>
   <button class="btn" type="submit">Skapa uppdrag →</button>
 </form>

@@ -68,6 +68,7 @@ def test_complete_assignment_report_review_and_tenant_flow(monkeypatch, tmp_path
                 "deadline": "2026-11-20",
                 "video_url": "https://example.com/licensed-match",
                 "instructions": "Bedöm spelaren med konkreta observationer.",
+                "public_description": "Kort analys av en mittfältare.",
                 "scout_request": "Önskar erfarenhet av centrala mittfältare.",
                 "scout_id": str(scout_id),
             },
@@ -88,6 +89,8 @@ def test_complete_assignment_report_review_and_tenant_flow(monkeypatch, tmp_path
             assignment_page = scout.get(f"/assignments/{assignment_id}")
             assert assignment_page.status_code == 200
             assert "https://example.com/licensed-match" not in assignment_page.text
+            assert "Kort analys av en mittfältare." in assignment_page.text
+            assert "Bedöm spelaren med konkreta observationer." not in assignment_page.text
             response = scout.post(
                 f"/assignments/{assignment_id}/apply",
                 data={"csrf": csrf_from(assignment_page)},
@@ -112,6 +115,7 @@ def test_complete_assignment_report_review_and_tenant_flow(monkeypatch, tmp_path
             login(scout, "scout")
             assignment_page = scout.get(f"/assignments/{assignment_id}")
             assert "https://example.com/licensed-match" in assignment_page.text
+            assert "Bedöm spelaren med konkreta observationer." in assignment_page.text
             response = scout.post(
                 f"/assignments/{assignment_id}/reports",
                 data={"csrf": csrf_from(assignment_page), "kind": "player"},
@@ -134,6 +138,7 @@ def test_complete_assignment_report_review_and_tenant_flow(monkeypatch, tmp_path
             assert b"/Count 16" in opposition_template.content
 
             edit_page = scout.get(f"/reports/{report_id}/edit")
+            assert "Bedöm spelaren med konkreta observationer." not in edit_page.text
             assert 'id="report-form"' in edit_page.text
             assert 'id="attachment-form"' in edit_page.text
             assert '/static/report-form.js' in edit_page.text
@@ -174,6 +179,7 @@ def test_complete_assignment_report_review_and_tenant_flow(monkeypatch, tmp_path
                     "csrf": csrf_from(report_page),
                     "decision": "approve",
                     "review_note": "Godkänd i integrationstest.",
+                    "delivery_note": "Klubbens leveransmeddelande.",
                 },
                 follow_redirects=False,
             )
@@ -182,6 +188,10 @@ def test_complete_assignment_report_review_and_tenant_flow(monkeypatch, tmp_path
         approved_report = club.get(f"/reports/{report_id}")
         assert approved_report.status_code == 200
         assert "Godkänd" in approved_report.text
+        assert "Klubbens leveransmeddelande." in approved_report.text
+        assert "Godkänd i integrationstest." not in approved_report.text
+        club_assignment = club.get(f"/assignments/{assignment_id}")
+        assert "Status: Godkänd" in club_assignment.text
         club_dashboard = club.get("/app")
         assert "Integrationsuppdrag" not in dashboard_section(club_dashboard, "active-assignments")
         club_completed = dashboard_section(club_dashboard, "completed-assignments")
@@ -194,6 +204,15 @@ def test_complete_assignment_report_review_and_tenant_flow(monkeypatch, tmp_path
             scout_dashboard = scout.get("/app")
             assert "Integrationsuppdrag" not in dashboard_section(scout_dashboard, "active-assignments")
             assert "Integrationsuppdrag" in dashboard_section(scout_dashboard, "completed-assignments")
+            scout_assignment = scout.get(f"/assignments/{assignment_id}")
+            assert "Skapa rapport" not in scout_assignment.text
+            assert "Slutfört." in scout_assignment.text
+            assert "Godkänd i integrationstest." in scout.get(f"/reports/{report_id}").text
+            blocked = scout.post(
+                f"/assignments/{assignment_id}/reports",
+                data={"csrf": csrf_from(scout_assignment), "kind": "opposition"},
+            )
+            assert blocked.status_code == 409
 
         with TestClient(module.app, base_url="http://testserver") as admin:
             login(admin, "admin")
@@ -235,3 +254,19 @@ def test_complete_assignment_report_review_and_tenant_flow(monkeypatch, tmp_path
         assert rival.get(f"/assignments/{assignment_id}").status_code == 403
         assert rival.get(f"/reports/{report_id}").status_code == 403
         assert rival.get(f"/reports/{report_id}/attachment").status_code == 403
+
+    with TestClient(module.app, base_url="http://testserver") as admin:
+        login(admin, "admin")
+        report_page = admin.get(f"/reports/{report_id}")
+        assert "Öppna för komplettering" in report_page.text
+        reopened = admin.post(
+            f"/reports/{report_id}/review",
+            data={"csrf": csrf_from(report_page), "decision": "changes", "review_note": "Förtydliga analysen."},
+            follow_redirects=False,
+        )
+        assert reopened.status_code == 303
+        assert "Integrationsuppdrag" in dashboard_section(admin.get("/app"), "active-assignments")
+    with TestClient(module.app, base_url="http://testserver") as club:
+        login(club, "klubb")
+        assert club.get(f"/reports/{report_id}").status_code == 403
+        assert club.get(f"/reports/{report_id}/pdf").status_code == 403
