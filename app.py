@@ -174,6 +174,11 @@ def init_db():
             con.execute("ALTER TABLE assignments ADD COLUMN scout_request TEXT NOT NULL DEFAULT ''")
         if 'purpose' not in assignment_columns:
             con.execute("ALTER TABLE assignments ADD COLUMN purpose TEXT NOT NULL DEFAULT 'club'")
+        if 'public_description' not in assignment_columns:
+            con.execute("ALTER TABLE assignments ADD COLUMN public_description TEXT NOT NULL DEFAULT ''")
+        report_columns={row['name'] for row in con.execute('PRAGMA table_info(reports)')}
+        if 'delivery_note' not in report_columns:
+            con.execute("ALTER TABLE reports ADD COLUMN delivery_note TEXT NOT NULL DEFAULT ''")
         init_academy(con)
         used_usernames={row['username'].lower() for row in con.execute("SELECT username FROM users WHERE username IS NOT NULL AND TRIM(username)<>''").fetchall()}
         for existing in con.execute("SELECT id,email FROM users WHERE username IS NULL OR TRIM(username)='' ORDER BY id").fetchall():
@@ -658,7 +663,7 @@ def new_assignment_page(request:Request):
     return page(request,'new_assignment.html',clubs=clubs,scouts=scouts)
 
 @app.post('/assignments/new')
-async def new_assignment(request:Request,club_id:int=Form(...),title:str=Form(...),fixture:str=Form(...),match_date:str=Form(''),deadline:str=Form(''),video_url:str=Form(''),instructions:str=Form(''),scout_request:str=Form(''),scout_id:str=Form(''),csrf:str=Form(...)):
+async def new_assignment(request:Request,club_id:int=Form(...),title:str=Form(...),fixture:str=Form(...),match_date:str=Form(''),deadline:str=Form(''),video_url:str=Form(''),instructions:str=Form(''),public_description:str=Form(''),scout_request:str=Form(''),scout_id:str=Form(''),csrf:str=Form(...)):
     u=require_user(request,('admin','club'));check_token(request,csrf)
     if u['role']=='club' and u['club_id']!=club_id:raise HTTPException(403)
     if not title.strip() or not fixture.strip():raise HTTPException(400,'Titel och match krävs.')
@@ -670,8 +675,8 @@ async def new_assignment(request:Request,club_id:int=Form(...),title:str=Form(..
         if not target_club:raise HTTPException(404)
         if target_club['name']=='Andrablicken Academy':raise HTTPException(400,'Academy-klubben är reserverad för examinationer.')
         if scout and not con.execute("SELECT 1 FROM users WHERE id=? AND role='scout'",(scout,)).fetchone():raise HTTPException(400)
-        con.execute('INSERT INTO assignments(club_id,title,fixture,match_date,deadline,video_url,instructions,scout_request,scout_id,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)',
-                    (club_id,title.strip()[:160],fixture.strip()[:160],match_date[:20],deadline[:20],video,instructions[:5000],scout_request.strip()[:2000],scout,datetime.now().isoformat(timespec='minutes')))
+        con.execute('INSERT INTO assignments(club_id,title,fixture,match_date,deadline,video_url,instructions,public_description,scout_request,scout_id,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+                    (club_id,title.strip()[:160],fixture.strip()[:160],match_date[:20],deadline[:20],video,instructions[:5000],public_description.strip()[:500],scout_request.strip()[:2000],scout,datetime.now().isoformat(timespec='minutes')))
         aid=con.execute('SELECT last_insert_rowid() AS id').fetchone()['id']
     notice(request,'Uppdraget är skapat.')
     return go(f'/assignments/{aid}')
@@ -683,12 +688,13 @@ def assignment_detail(request:Request,aid:int):
     if not can_access_assignment(u,a):raise HTTPException(403)
     with db() as con:
         reports=con.execute('SELECT r.*,u.name AS scout_name FROM reports r JOIN users u ON u.id=r.scout_id WHERE r.assignment_id=? ORDER BY r.id DESC',(aid,)).fetchall()
+        completed=a['purpose']=='club' and any(r['status']=='approved' for r in reports)
         if u['role']=='club':reports=[r for r in reports if r['status']=='approved']
         elif u['role']=='scout':reports=[r for r in reports if r['scout_id']==u['id']]
         applicants=con.execute('SELECT ap.*,u.name,u.email FROM applications ap JOIN users u ON u.id=ap.scout_id WHERE ap.assignment_id=?',(aid,)).fetchall() if u['role']=='admin' else []
         has_applied=con.execute('SELECT 1 FROM applications WHERE assignment_id=? AND scout_id=?',(aid,u['id'])).fetchone() is not None if u['role']=='scout' else False
     full=can_access_assignment(u,a,full=True)
-    return page(request,'assignment.html',a=a,reports=reports,applicants=applicants,has_applied=has_applied,full=full)
+    return page(request,'assignment.html',a=a,reports=reports,applicants=applicants,has_applied=has_applied,full=full,completed=completed)
 
 @app.post('/assignments/{aid}/apply')
 async def apply(request:Request,aid:int,csrf:str=Form(...)):
@@ -727,8 +733,11 @@ async def create_report(request:Request,aid:int,kind:str=Form(...),csrf:str=Form
     if u['role']=='scout' and a['scout_id']!=u['id']:raise HTTPException(403)
     if kind not in ('player','opposition'):raise HTTPException(400)
     now=datetime.now().isoformat(timespec='minutes')
-    payload={'scout_name':u['name'],'match_date':a['match_date'],'source':a['video_url'],'game_context':a['instructions']}
+    payload={'scout_name':u['name'],'match_date':a['match_date'],'source':a['video_url']}
     with db() as con:
+        con.execute('BEGIN IMMEDIATE')
+        if a['purpose']=='club' and con.execute("SELECT 1 FROM reports WHERE assignment_id=? AND status='approved'",(aid,)).fetchone():
+            raise HTTPException(409,'Uppdraget är slutfört. Be en administratör att öppna den godkända rapporten för komplettering.')
         con.execute("INSERT INTO reports(assignment_id,scout_id,kind,payload,status,created_at,updated_at) VALUES (?,?,?,?,?,?,?)",(aid,u['id'],kind,json.dumps(payload,ensure_ascii=False),'draft',now,now))
         rid=con.execute('SELECT last_insert_rowid() AS id').fetchone()['id']
     return go(f'/reports/{rid}/edit')
@@ -826,7 +835,7 @@ async def upload_attachment(request:Request,rid:int,file:UploadFile=File(...),cs
     return go('/mallbibliotek' if return_to=='mallbibliotek' else f'/reports/{rid}/edit')
 
 @app.post('/reports/{rid}/review')
-async def review_report(request:Request,rid:int,decision:str=Form(...),review_note:str=Form(''),csrf:str=Form(...)):
+async def review_report(request:Request,rid:int,decision:str=Form(...),review_note:str=Form(''),delivery_note:str=Form(''),csrf:str=Form(...)):
     require_user(request,('admin',));check_token(request,csrf);r=fetch_report(rid)
     if not r:raise HTTPException(404)
     with db() as con:
@@ -835,7 +844,11 @@ async def review_report(request:Request,rid:int,decision:str=Form(...),review_no
     if decision not in ('approve','changes'):raise HTTPException(400)
     if r['status'] not in ('submitted','approved'):raise HTTPException(409,'Rapporten är inte inskickad.')
     status='approved' if decision=='approve' else 'changes_requested'
-    with db() as con:con.execute('UPDATE reports SET status=?,review_note=?,updated_at=? WHERE id=?',(status,review_note[:3000],datetime.now().isoformat(timespec='minutes'),rid))
+    with db() as con:
+        updated=con.execute('UPDATE reports SET status=?,review_note=?,delivery_note=?,updated_at=? WHERE id=? AND status=?',
+            (status,review_note.strip()[:3000],delivery_note.strip()[:3000] if decision=='approve' else '',datetime.now().isoformat(timespec='minutes'),rid,r['status']))
+        if not updated.rowcount:
+            raise HTTPException(409,'Rapportens status har ändrats. Ladda om sidan.')
     notice(request,'Rapporten godkänd och synlig för klubben.' if decision=='approve' else 'Ändringar begärda. Scouten kan redigera igen.')
     return go(f'/reports/{rid}')
 
